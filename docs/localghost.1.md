@@ -7,11 +7,11 @@ localghost - friendly local hostnames for app repos
 ## Synopsis
 
 ```sh
-localghost init [--write-scripts] [--host host] [--port port]
+localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
-localghost setup [--project name]
-localghost dev
-localghost print
+localghost setup [--project name] [--config file] [--config-pattern regex]
+localghost dev [--config file] [--config-pattern regex]
+localghost print [--config file] [--config-pattern regex]
 ```
 
 ## Description
@@ -22,7 +22,7 @@ Localghost reads `.localghost`, writes a managed `/etc/hosts` block, generates `
 
 ### init
 
-Creates `.localghost` in the current project.
+Creates `.localghost` in the current project by default. Pass `--config <file>` to create a differently named config file.
 
 ```sh
 localghost init --write-scripts
@@ -37,7 +37,7 @@ Options:
 - `--api-port <number>`: API port.
 - `--package-manager <npm|yarn|pnpm>`: package manager for suggested commands.
 - `--write-scripts`: add Localghost scripts to `package.json`.
-- `--force`: overwrite an existing `.localghost` file.
+- `--force`: overwrite an existing config file.
 
 ### doctor
 
@@ -51,7 +51,7 @@ Currently checks Caddy and prints `brew install caddy` when missing.
 
 ### setup
 
-Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfile`, and validates it with Caddy.
+Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfile`, and validates it with Caddy. Pass `--config <file>` to look for a specific config file. Repeat `--config` to use the first existing file from an ordered list. Pass `--config-pattern <regex>` to search matching filenames in the project root.
 
 ```sh
 localghost setup --project app
@@ -59,7 +59,7 @@ localghost setup --project app
 
 ### dev
 
-Writes `ops/local/Caddyfile`, validates it, and runs Caddy.
+Writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`.
 
 ```sh
 localghost dev
@@ -67,7 +67,7 @@ localghost dev
 
 ### print
 
-Prints parsed `.localghost` entries as JSON.
+Prints parsed Localghost config entries as JSON. Supports `--config` and `--config-pattern`.
 
 ```sh
 localghost print
@@ -75,8 +75,8 @@ localghost print
 
 ## Files
 
-- `.localghost`: canonical project hostname config.
-- `.dev-hosts`: legacy fallback.
+- `.localghost`: default project hostname config.
+- custom config files: pass `--config <file>` or `--config-pattern <regex>`.
 - `ops/local/Caddyfile`: generated local Caddy config.
 - `/etc/hosts`: managed block only, bounded by `# localghost:start` and `# localghost:end`.
 

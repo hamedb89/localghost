@@ -1,10 +1,12 @@
 import type { HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
-import { readDevHosts } from "./config.js";
+import { readDevHosts, type ConfigPattern, type ReadDevHostsOptions } from "./config.js";
 import type { DevHostEntry } from "./parse.js";
 
 export type LocalGhostPluginOptions = {
   cwd?: string;
   fileName?: string;
+  configFiles?: string[];
+  configPattern?: ConfigPattern;
   port?: number;
   https?: boolean;
   primaryHost?: string;
@@ -55,6 +57,15 @@ function printLocalHosts(server: ViteDevServer, entries: DevHostEntry[], vitePor
   });
 }
 
+function readOptionsFromPlugin(options: LocalGhostPluginOptions): ReadDevHostsOptions {
+  return {
+    cwd: options.cwd ?? process.cwd(),
+    ...(options.fileName ? { fileName: options.fileName } : {}),
+    ...(options.configFiles ? { configFiles: options.configFiles } : {}),
+    ...(options.configPattern ? { configPattern: options.configPattern } : {})
+  };
+}
+
 export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin {
   let resolvedEntries: DevHostEntry[] = [];
   let resolvedVitePort: number | undefined;
@@ -64,13 +75,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
     enforce: "pre",
 
     config(userConfig): UserConfig {
-      const readOptions: { cwd: string; fileName?: string } = { cwd: options.cwd ?? process.cwd() };
-
-      if (options.fileName) {
-        readOptions.fileName = options.fileName;
-      }
-
-      const entries = readDevHosts(readOptions);
+      const entries = readDevHosts(readOptionsFromPlugin(options));
       const hosts = [...new Set(entries.map((entry) => entry.host))];
       const existingServer = userConfig.server ?? {};
       const vitePort =

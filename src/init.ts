@@ -14,6 +14,7 @@ export type InitOptions = {
   force?: boolean;
   packageManager?: PackageManager;
   writeScripts?: boolean;
+  configFile?: string;
 };
 
 export type InitResult = {
@@ -62,16 +63,26 @@ function readPackageJson(path: string): Record<string, unknown> | null {
   }
 }
 
-function updatePackageScripts(packageJsonPath: string): boolean {
+function shellQuote(value: string) {
+  if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function getConfigFlag(configFile: string) {
+  return configFile === LOCALGHOST_CONFIG_FILE ? "" : ` --config ${shellQuote(configFile)}`;
+}
+
+function updatePackageScripts(packageJsonPath: string, configFile: string): boolean {
   const pkg = readPackageJson(packageJsonPath);
   if (!pkg) return false;
 
   const scripts = typeof pkg.scripts === "object" && pkg.scripts ? (pkg.scripts as Record<string, unknown>) : {};
+  const configFlag = getConfigFlag(configFile);
   const nextScripts = {
     ...scripts,
-    "localghost:setup": scripts["localghost:setup"] ?? "localghost setup",
-    "localghost:proxy": scripts["localghost:proxy"] ?? "localghost dev",
-    "localghost:print": scripts["localghost:print"] ?? "localghost print",
+    "localghost:setup": scripts["localghost:setup"] ?? `localghost setup${configFlag}`,
+    "localghost:proxy": scripts["localghost:proxy"] ?? `localghost dev${configFlag}`,
+    "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
     "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor"
   };
 
@@ -91,7 +102,8 @@ export function initLocalghost(options: InitOptions = {}): InitResult {
   const apiHost = options.apiHost ?? `api.${host}`;
   const apiPort = options.apiPort ?? 8787;
   const packageManager = options.packageManager ?? detectPackageManager(cwd);
-  const configPath = join(cwd, LOCALGHOST_CONFIG_FILE);
+  const configFile = options.configFile ?? LOCALGHOST_CONFIG_FILE;
+  const configPath = join(cwd, configFile);
   const configExists = existsSync(configPath);
 
   if (configExists && !options.force) {
@@ -111,7 +123,7 @@ export function initLocalghost(options: InitOptions = {}): InitResult {
   writeTextFile(configPath, renderConfig({ host, port, apiHost, apiPort }));
 
   const packageJsonPath = join(cwd, "package.json");
-  const packageJsonChanged = options.writeScripts ? updatePackageScripts(packageJsonPath) : false;
+  const packageJsonChanged = options.writeScripts ? updatePackageScripts(packageJsonPath, configFile) : false;
 
   return {
     configPath,

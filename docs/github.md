@@ -6,7 +6,7 @@ Use this copy for the GitHub repo About box, topics, and social cards. Keep it s
 
 Friendly local HTTPS hostnames for app repos. A tiny CLI for `.localghost` configs, `/etc/hosts` blocks, Caddy reverse proxies, and Vite `allowedHosts`.
 
-Shorter fallback:
+Shorter alternative:
 
 Friendly local HTTPS hostnames for app repos, powered by `.localghost`, Caddy, `/etc/hosts`, and Vite.
 

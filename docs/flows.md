@@ -25,7 +25,7 @@ www.app.localhost 5173
 api.app.localhost 8787
 ```
 
-`.localghost` is the canonical config file. `.dev-hosts` still works as a legacy fallback for older repos.
+`.localghost` is the default config file. Repos can opt into another file name with `--config`, an ordered list of names, or a filename regex.
 
 ## Machine Readiness
 
@@ -54,6 +54,18 @@ yarn localghost:proxy
 ```
 
 Most repos will run this next to their app server, for example Vite on `127.0.0.1:5173`.
+
+## Config Discovery
+
+As a developer, I want Localghost to fit repos that already have naming conventions without hidden file searches.
+
+```sh
+yarn localghost print --config .localghost.preview
+yarn localghost print --config .localghost.private --config .localghost
+yarn localghost print --config-pattern '^\.localghost\.(private|preview)$'
+```
+
+Localghost uses the first existing configured file. Regex discovery scans filenames in the project root.
 
 ## Vite Integration
 

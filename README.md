@@ -11,7 +11,7 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 ## What It Does
 
 - Creates and reads `.localghost` in your app repo.
-- Keeps `.dev-hosts` working as a legacy fallback.
+- Lets repos choose explicit config files or filename patterns when `.localghost` is not enough.
 - Updates only a managed Localghost block in `/etc/hosts` during explicit setup.
 - Generates `ops/local/Caddyfile` for local HTTPS reverse proxying.
 - Checks whether Caddy is installed, but does not run Homebrew for you.
@@ -86,6 +86,29 @@ yarn localghost:proxy
 
 Prefer `.localhost` names. `.local` is supported, but Localghost warns because `.local` can collide with mDNS/Bonjour.
 
+## Config Files
+
+By default, Localghost reads `.localghost` from the project root. Repos that need another name can be explicit:
+
+```sh
+localghost print --config .localghost.preview
+localghost setup --config .localghost.preview
+```
+
+You can pass `--config` more than once. Localghost uses the first file that exists:
+
+```sh
+localghost print --config .localghost.private --config .localghost
+```
+
+You can also search project-root filenames with a regular expression:
+
+```sh
+localghost print --config-pattern '^\.localghost\.(private|preview)$'
+```
+
+The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `configPattern`. If you run `localghost init --config .localghost.preview --write-scripts`, generated package scripts include the matching `--config` flag.
+
 ## Package Scripts
 
 `localghost init --write-scripts` adds these scripts when they are missing:
@@ -123,13 +146,14 @@ export default defineConfig({
   plugins: [
     localGhostPlugin({
       port: 5173,
-      https: true
+      https: true,
+      configFiles: [".localghost.private", ".localghost"]
     })
   ]
 });
 ```
 
-The plugin generates an explicit `server.allowedHosts` list from `.localghost`; it does not set `allowedHosts: true`.
+The plugin generates an explicit `server.allowedHosts` list from the selected config file; it does not set `allowedHosts: true`.
 
 When Vite starts, Localghost prints the browser-facing URLs:
 
@@ -153,7 +177,8 @@ localghost init --write-scripts
 localghost doctor
 localghost setup
 localghost setup --project app
-localghost dev
+localghost setup --config .localghost.preview
+localghost dev --config-pattern '^\.localghost\.'
 localghost print
 ```
 
@@ -171,6 +196,7 @@ Localghost does not rewrite the whole hosts file. It replaces only its own manag
 
 ```ts
 import {
+  getConfigFileCandidates,
   initLocalghost,
   readDevHosts,
   renderCaddyfile,
@@ -178,6 +204,9 @@ import {
   runDoctor,
   updateSystemHosts
 } from "@hamedb89/localghost";
+
+readDevHosts({ configFiles: [".localghost.private", ".localghost"] });
+readDevHosts({ configPattern: /^\.localghost\.(private|preview)$/ });
 ```
 
 Vite helper:

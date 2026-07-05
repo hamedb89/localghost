@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, InvalidArgumentError } from "commander";
-import { getProjectName, readDevHosts, sanitizeProjectName } from "./config.js";
+import { getProjectName, readDevHosts, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
 import { validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { updateSystemHosts } from "./hosts-file.js";
@@ -32,6 +32,24 @@ function parsePackageManager(value: string): PackageManager {
   throw new InvalidArgumentError("Package manager must be npm, yarn, or pnpm.");
 }
 
+function collect(value: string, previous: string[] = []) {
+  return [...previous, value];
+}
+
+type ConfigCliOptions = {
+  cwd: string;
+  config?: string[];
+  configPattern?: string;
+};
+
+function readOptionsFromCli(options: ConfigCliOptions): ReadDevHostsOptions {
+  return {
+    cwd: options.cwd,
+    ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
+    ...(options.configPattern ? { configPattern: options.configPattern } : {})
+  };
+}
+
 async function assertCaddyReady() {
   const caddy = await checkCaddy();
   if (caddy.found) return;
@@ -54,15 +72,17 @@ program
   .command("init")
   .description("Create a .localghost config for this project")
   .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to create", ".localghost")
   .option("--host <host>", "Primary local hostname")
   .option("--port <number>", "Primary app port", parsePort)
   .option("--api-host <host>", "API local hostname")
   .option("--api-port <number>", "API port", parsePort)
   .option("--package-manager <npm|yarn|pnpm>", "Package manager for suggested commands", parsePackageManager)
   .option("--write-scripts", "Add localghost scripts to package.json")
-  .option("--force", "Overwrite an existing .localghost file")
+  .option("--force", "Overwrite an existing config file")
   .action((options: {
     cwd: string;
+    config: string;
     host?: string;
     port?: number;
     apiHost?: string;
@@ -71,7 +91,7 @@ program
     writeScripts?: boolean;
     force?: boolean;
   }) => {
-    const result = initLocalghost(options);
+    const result = initLocalghost({ ...options, configFile: options.config });
 
     if (result.configCreated) {
       console.log(`Buh. Created ${result.configPath}`);
@@ -119,11 +139,13 @@ program
   .description("Update /etc/hosts and generate/validate Caddyfile")
   .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
-  .action(async (options: { project?: string; cwd: string }) => {
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .action(async (options: ConfigCliOptions & { project?: string }) => {
     await assertCaddyReady();
 
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
-    const entries = readDevHosts({ cwd: options.cwd });
+    const entries = readDevHosts(readOptionsFromCli(options));
 
     warnAboutLocalMdns(entries);
 
@@ -146,10 +168,12 @@ program
   .command("dev")
   .description("Generate Caddyfile and run Caddy")
   .option("--cwd <path>", "Project directory", process.cwd())
-  .action(async (options: { cwd: string }) => {
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .action(async (options: ConfigCliOptions) => {
     await assertCaddyReady();
 
-    const entries = readDevHosts({ cwd: options.cwd });
+    const entries = readDevHosts(readOptionsFromCli(options));
 
     warnAboutLocalMdns(entries);
 
@@ -162,8 +186,10 @@ program
   .command("print")
   .description("Print parsed host config")
   .option("--cwd <path>", "Project directory", process.cwd())
-  .action((options: { cwd: string }) => {
-    const entries = readDevHosts({ cwd: options.cwd });
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .action((options: ConfigCliOptions) => {
+    const entries = readDevHosts(readOptionsFromCli(options));
     warnAboutLocalMdns(entries);
     console.log(JSON.stringify(entries, null, 2));
   });
