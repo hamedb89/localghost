@@ -19,6 +19,7 @@ export type LocalghostState = {
   hostsTempPath?: string;
   caddyfilePath?: string;
   caddyfileRemoved?: boolean;
+  caddyHttps?: boolean;
   entries?: DevHostEntry[];
 };
 

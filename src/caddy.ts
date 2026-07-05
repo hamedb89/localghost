@@ -3,6 +3,10 @@ import { execa } from "execa";
 import { writeTextFile } from "./fs.js";
 import type { DevHostEntry } from "./parse.js";
 
+export type CaddyModeOptions = {
+  https?: boolean;
+};
+
 function groupByPort(entries: DevHostEntry[]) {
   const groups = new Map<number, DevHostEntry[]>();
 
@@ -19,13 +23,14 @@ export function getCaddyfilePath(cwd = process.cwd()) {
   return join(cwd, "ops/local/Caddyfile");
 }
 
-export function renderCaddyfile(entries: DevHostEntry[]) {
+export function renderCaddyfile(entries: DevHostEntry[], options: CaddyModeOptions = {}) {
   const groups = groupByPort(entries);
+  const https = options.https === true;
   const blocks = [...groups.entries()]
     .sort(([leftPort], [rightPort]) => leftPort - rightPort)
     .map(([port, group]) => {
       const hosts = group
-        .map((entry) => entry.host)
+        .map((entry) => (https ? entry.host : `http://${entry.host}`))
         .sort()
         .join(", ");
 
@@ -34,17 +39,21 @@ export function renderCaddyfile(entries: DevHostEntry[]) {
 }`;
     });
 
-  return `{
+  const globalOptions = https
+    ? `{
   local_certs
 }
 
-${blocks.join("\n\n")}
+`
+    : "";
+
+  return `${globalOptions}${blocks.join("\n\n")}
 `;
 }
 
-export async function writeCaddyfile(entries: DevHostEntry[], cwd = process.cwd()) {
+export async function writeCaddyfile(entries: DevHostEntry[], cwd = process.cwd(), options: CaddyModeOptions = {}) {
   const path = getCaddyfilePath(cwd);
-  writeTextFile(path, renderCaddyfile(entries));
+  writeTextFile(path, renderCaddyfile(entries, options));
   return path;
 }
 

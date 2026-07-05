@@ -1,5 +1,6 @@
-import type { HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
+import type { ConfigEnv, HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
 import { readDevHosts, type ConfigPattern, type ReadDevHostsOptions } from "./config.js";
+import { isProductionLike } from "./env.js";
 import type { DevHostEntry } from "./parse.js";
 
 export type LocalGhostPluginOptions = {
@@ -45,7 +46,7 @@ function printLocalHosts(server: ViteDevServer, entries: DevHostEntry[], vitePor
   const lines = [
     "",
     "  localghost",
-    `  open:   ${primaryUrl}`,
+    `  local:  ${primaryUrl}`,
     ...urls.slice(1).map((url) => `  also:   ${url}`),
     vitePort ? `  target: http://127.0.0.1:${vitePort}/` : undefined,
     https ? "  proxy:  Caddy local HTTPS" : undefined
@@ -74,7 +75,11 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
     name: "localghost:vite",
     enforce: "pre",
 
-    config(userConfig): UserConfig {
+    config(userConfig, configEnv: ConfigEnv): UserConfig {
+      if (configEnv.command !== "serve" || configEnv.mode === "production" || isProductionLike()) {
+        return {};
+      }
+
       const entries = readDevHosts(readOptionsFromPlugin(options));
       const hosts = [...new Set(entries.map((entry) => entry.host))];
       const existingServer = userConfig.server ?? {};
@@ -96,6 +101,10 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
         allowedHosts: mergeAllowedHosts(existingServer.allowedHosts, hosts),
         strictPort: existingServer.strictPort ?? true
       };
+
+      if (typeof existingServer.host === "undefined" && primaryHost) {
+        server.host = primaryHost;
+      }
 
       if (vitePort) {
         server.port = vitePort;

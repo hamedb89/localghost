@@ -4,11 +4,11 @@ Use this copy for the GitHub repo About box, topics, and social cards. Keep it s
 
 ## Repository Description
 
-Friendly local HTTPS hostnames for app repos. A tiny CLI for `.localghost` configs, `/etc/hosts` blocks, Caddy reverse proxies, and Vite `allowedHosts`.
+Friendly local hostnames for app repos. A tiny CLI for `.localghost` configs, `/etc/hosts` blocks, Caddy reverse proxies, and Vite `allowedHosts`.
 
 Shorter alternative:
 
-Friendly local HTTPS hostnames for app repos, powered by `.localghost`, Caddy, `/etc/hosts`, and Vite.
+Friendly local hostnames for app repos, powered by `.localghost`, Caddy, `/etc/hosts`, and Vite.
 
 ## Topics
 
@@ -49,7 +49,7 @@ reverse-proxy
 
 ## Search Phrases To Own
 
-- local HTTPS hostnames for Vite
+- local hostnames for Vite
 - Caddy localhost reverse proxy
 - friendly localhost domains
 - manage /etc/hosts for local development
@@ -62,7 +62,7 @@ After creating `hamedb89/localghost`, this sets the public repo metadata:
 
 ```sh
 gh repo edit hamedb89/localghost \
-  --description "Friendly local HTTPS hostnames for app repos. A tiny CLI for .localghost configs, /etc/hosts blocks, Caddy reverse proxies, and Vite allowedHosts." \
+  --description "Friendly local hostnames for app repos. A tiny CLI for .localghost configs, /etc/hosts blocks, Caddy reverse proxies, and Vite allowedHosts." \
   --homepage "https://hamedb89.github.io/localghost/" \
   --add-topic localhost \
   --add-topic local-development \
@@ -81,7 +81,7 @@ gh repo edit hamedb89/localghost \
 The first visible paragraph should say what it is, who it is for, and what tools it touches:
 
 ```txt
-Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file.
+Localghost is a tiny Node.js CLI for local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file.
 ```
 
 That phrasing helps GitHub search and npm search without making the README feel like SEO sludge.

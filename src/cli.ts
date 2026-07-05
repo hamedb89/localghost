@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
-import { getCaddyfilePath, validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
+import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
-import { removeSystemHosts, updateSystemHosts } from "./hosts-file.js";
+import { assertLocalDevelopment } from "./env.js";
+import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
 import { formatDomainRoutes } from "./routes.js";
@@ -22,8 +23,8 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   }
 }
 
-function logDomainRoutes(entries: ReturnType<typeof readDevHosts>) {
-  console.log(formatDomainRoutes(entries));
+function logDomainRoutes(entries: ReturnType<typeof readDevHosts>, options: { https?: boolean } = {}) {
+  console.log(formatDomainRoutes(entries, options));
 }
 
 function parsePort(value: string) {
@@ -50,6 +51,11 @@ type ConfigCliOptions = {
   configPattern?: string;
 };
 
+type ProxyModeCliOptions = {
+  https?: boolean;
+  ssl?: boolean;
+};
+
 function readOptionsFromCli(options: ConfigCliOptions): ReadDevHostsOptions {
   return {
     cwd: options.cwd,
@@ -67,6 +73,71 @@ async function assertCaddyReady() {
     `Install it with: ${caddy.installHint}`,
     "Localghost will not install it for you. No surprise spells."
   ].join("\n"));
+}
+
+function useHttps(options: ProxyModeCliOptions) {
+  return options.https === true || options.ssl === true;
+}
+
+function getSetupCommand(options: { https?: boolean; config?: string[]; configPattern?: string }) {
+  const configFlags = [
+    ...(options.config ?? []).map((config) => ` --config ${config}`),
+    ...(options.configPattern ? [` --config-pattern ${options.configPattern}`] : [])
+  ].join("");
+  return `localghost setup${configFlags}${options.https ? " --https" : ""}`;
+}
+
+function getSetupReadiness(options: ConfigCliOptions & { project?: string; https?: boolean }) {
+  const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
+  const readOptions = readOptionsFromCli(options);
+  const entries = readDevHosts(readOptions);
+  const configPath = resolveDevHostsPath(readOptions).path;
+  const caddyfilePath = getCaddyfilePath(options.cwd);
+  const statePath = getLocalghostStatePath(options.cwd);
+  const state = readLocalghostState(options.cwd);
+  const https = options.https === true;
+  const reasons: string[] = [];
+
+  if (!state) {
+    reasons.push(`No Localghost setup state found at ${statePath}.`);
+  } else {
+    if (state.action !== "setup") reasons.push(`Last Localghost action is ${state.action}, not setup.`);
+    if (state.projectName !== projectName) reasons.push(`Setup state is for project ${state.projectName}, not ${projectName}.`);
+    if (state.configPath !== configPath) reasons.push(`Setup state points at ${state.configPath ?? "no config"}, not ${configPath}.`);
+  }
+
+  const hostsPath = getSystemHostsPath();
+  try {
+    const hosts = readFileSync(hostsPath, "utf8");
+    const expectedHostsBlock = renderHostsBlock(projectName, entries).trimEnd();
+    if (!hosts.includes(expectedHostsBlock)) {
+      reasons.push(`The Localghost hosts block in ${hostsPath} is missing or stale.`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reasons.push(`Could not read ${hostsPath}: ${message}`);
+  }
+
+  if (!existsSync(caddyfilePath)) {
+    reasons.push(`Missing Caddyfile at ${caddyfilePath}.`);
+  } else {
+    const expectedCaddyfile = renderCaddyfile(entries, { https });
+    const currentCaddyfile = readFileSync(caddyfilePath, "utf8");
+    if (currentCaddyfile !== expectedCaddyfile) {
+      reasons.push(`Caddyfile at ${caddyfilePath} is stale for ${https ? "HTTPS" : "HTTP"} mode.`);
+    }
+  }
+
+  return {
+    ready: reasons.length === 0,
+    reasons,
+    entries,
+    projectName,
+    configPath,
+    caddyfilePath,
+    statePath,
+    setupCommand: getSetupCommand(options)
+  };
 }
 
 const program = new Command();
@@ -184,16 +255,20 @@ program
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
   .option("--config-pattern <regex>", "Regex for config filenames in the project root")
-  .action(async (options: ConfigCliOptions & { project?: string }) => {
+  .option("--https", "Generate a local HTTPS Caddy proxy with Caddy local certificates")
+  .option("--ssl", "Alias for --https")
+  .action(async (options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) => {
+    assertLocalDevelopment("setup");
     await assertCaddyReady();
 
+    const https = useHttps(options);
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
     const readOptions = readOptionsFromCli(options);
     const configPath = resolveDevHostsPath(readOptions).path;
     const entries = readDevHosts(readOptions);
 
     warnAboutLocalMdns(entries);
-    logDomainRoutes(entries);
+    logDomainRoutes(entries, { https });
 
     const hostsResult = await updateSystemHosts(projectName, entries);
 
@@ -203,7 +278,7 @@ program
       console.log(`${hostsResult.hostsPath} already up to date`);
     }
 
-    const caddyfile = await writeCaddyfile(entries, options.cwd);
+    const caddyfile = await writeCaddyfile(entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
 
     const statePath = writeLocalghostState(options.cwd, {
@@ -215,10 +290,12 @@ program
       hostsChanged: hostsResult.changed,
       ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
       caddyfilePath: caddyfile,
+      caddyHttps: https,
       entries
     });
 
     console.log(`Generated ${caddyfile}`);
+    console.log(`Mode ${https ? "HTTPS" : "HTTP"}`);
     console.log(`State ${statePath}`);
     console.log("Setup complete.");
   });
@@ -230,6 +307,7 @@ program
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--remove-caddyfile", "Also remove ops/local/Caddyfile")
   .action(async (options: { project?: string; cwd: string; removeCaddyfile?: boolean }) => {
+    assertLocalDevelopment("teardown");
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
     const hostsResult = await removeSystemHosts(projectName);
     const caddyfilePath = getCaddyfilePath(options.cwd);
@@ -267,30 +345,52 @@ program
 program
   .command("status")
   .description("Print Localghost's project-local state file")
+  .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--ready", "Exit non-zero when setup is missing or stale")
+  .option("--https", "Check setup readiness for HTTPS mode")
+  .option("--ssl", "Alias for --https")
   .option("--json", "Print raw JSON")
-  .action((options: { cwd: string; json?: boolean }) => {
+  .action((options: ConfigCliOptions & { project?: string; ready?: boolean; json?: boolean } & ProxyModeCliOptions) => {
     const state = readLocalghostState(options.cwd);
     const statePath = getLocalghostStatePath(options.cwd);
+    const readiness = getSetupReadiness({ ...options, https: useHttps(options) });
+
+    if (options.json) {
+      console.log(JSON.stringify({ state, setup: readiness }, null, 2));
+      return;
+    }
 
     if (!state) {
       console.log(`No Localghost state found at ${statePath}`);
+    } else {
+      console.log(`State: ${statePath}`);
+      console.log(`Last action: ${state.action}`);
+      console.log(`Updated: ${state.updatedAt}`);
+      console.log(`Project: ${state.projectName}`);
+      if (state.configPath) console.log(`Config: ${state.configPath}`);
+      if (state.hostsPath) console.log(`Hosts: ${state.hostsPath}`);
+      if (state.caddyfilePath) console.log(`Caddyfile: ${state.caddyfilePath}`);
+      if (typeof state.caddyHttps === "boolean") console.log(`Mode: ${state.caddyHttps ? "HTTPS" : "HTTP"}`);
+      if (typeof state.caddyfileRemoved === "boolean") console.log(`Caddyfile removed: ${state.caddyfileRemoved}`);
+    }
+
+    if (readiness.ready) {
+      console.log("Setup ready: yes");
       return;
     }
 
-    if (options.json) {
-      console.log(JSON.stringify(state, null, 2));
-      return;
+    console.log("Setup ready: no");
+    for (const reason of readiness.reasons) {
+      console.log(`  - ${reason}`);
     }
+    console.log(`Run: ${readiness.setupCommand}`);
 
-    console.log(`State: ${statePath}`);
-    console.log(`Last action: ${state.action}`);
-    console.log(`Updated: ${state.updatedAt}`);
-    console.log(`Project: ${state.projectName}`);
-    if (state.configPath) console.log(`Config: ${state.configPath}`);
-    if (state.hostsPath) console.log(`Hosts: ${state.hostsPath}`);
-    if (state.caddyfilePath) console.log(`Caddyfile: ${state.caddyfilePath}`);
-    if (typeof state.caddyfileRemoved === "boolean") console.log(`Caddyfile removed: ${state.caddyfileRemoved}`);
+    if (options.ready) {
+      process.exitCode = 1;
+    }
   });
 
 program
@@ -300,27 +400,64 @@ program
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
   .option("--config-pattern <regex>", "Regex for config filenames in the project root")
   .option("--http", "Print domain URLs with http instead of https")
-  .action((options: ConfigCliOptions & { http?: boolean }) => {
+  .option("--https", "Print domain URLs with https")
+  .option("--ssl", "Alias for --https")
+  .action((options: ConfigCliOptions & { http?: boolean } & ProxyModeCliOptions) => {
     const entries = readDevHosts(readOptionsFromCli(options));
     warnAboutLocalMdns(entries);
-    console.log(formatDomainRoutes(entries, { https: !options.http }));
+    console.log(formatDomainRoutes(entries, { https: options.http ? false : useHttps(options) }));
   });
 
 program
   .command("dev")
-  .description("Generate Caddyfile and run Caddy")
+  .description("Run the Localghost Caddy proxy after setup")
+  .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
   .option("--config-pattern <regex>", "Regex for config filenames in the project root")
-  .action(async (options: ConfigCliOptions) => {
+  .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
+  .option("--ssl", "Alias for --https")
+  .option("--setup", "Run setup before starting the proxy when setup is missing or stale")
+  .action(async (options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions) => {
+    assertLocalDevelopment("dev");
     await assertCaddyReady();
 
-    const entries = readDevHosts(readOptionsFromCli(options));
+    const https = useHttps(options);
+    const readiness = getSetupReadiness({ ...options, https });
 
-    warnAboutLocalMdns(entries);
-    logDomainRoutes(entries);
+    if (!readiness.ready) {
+      if (!options.setup) {
+        throw new Error(
+          [
+            "Localghost setup is missing or stale.",
+            ...readiness.reasons.map((reason) => `- ${reason}`),
+            `Run: ${readiness.setupCommand}`,
+            "Or rerun dev with --setup if you want Localghost to perform setup first."
+          ].join("\n")
+        );
+      }
 
-    const caddyfile = await writeCaddyfile(entries, options.cwd);
+      const hostsResult = await updateSystemHosts(readiness.projectName, readiness.entries);
+      const caddyfilePath = await writeCaddyfile(readiness.entries, options.cwd, { https });
+      await validateCaddyfile(caddyfilePath);
+      writeLocalghostState(options.cwd, {
+        action: "setup",
+        projectName: readiness.projectName,
+        cwd: options.cwd,
+        configPath: readiness.configPath,
+        hostsPath: hostsResult.hostsPath,
+        hostsChanged: hostsResult.changed,
+        ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
+        caddyfilePath,
+        caddyHttps: https,
+        entries: readiness.entries
+      });
+    }
+
+    warnAboutLocalMdns(readiness.entries);
+    logDomainRoutes(readiness.entries, { https });
+
+    const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
     await runCaddy(caddyfile);
   });

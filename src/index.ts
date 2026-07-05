@@ -9,6 +9,7 @@ export {
 } from "./config.js";
 export { getCaddyfilePath, renderCaddyfile, runCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 export { checkCaddy, runDoctor } from "./doctor.js";
+export { assertLocalDevelopment, getProductionEnvKeys, getProductionReason, isProductionLike } from "./env.js";
 export {
   getSystemHostsPath,
   removeManagedBlock,
@@ -38,7 +39,9 @@ export {
   UPDATE_CHECK_TIMEOUT_MS
 } from "./update-check.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
+export type { CaddyModeOptions } from "./caddy.js";
 export type { DoctorResult } from "./doctor.js";
+export type { LocalghostEnvironment } from "./env.js";
 export type { InitOptions, InitResult, PackageManager } from "./init.js";
 export type { RemoveSystemHostsResult, UpdateSystemHostsResult } from "./hosts-file.js";
 export type { DevHostEntry } from "./parse.js";

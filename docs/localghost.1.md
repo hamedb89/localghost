@@ -9,19 +9,21 @@ localghost - friendly local hostnames for app repos
 ```sh
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
-localghost setup [--project name] [--config file] [--config-pattern regex]
+localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
 localghost teardown [--project name] [--remove-caddyfile]
-localghost status [--json]
+localghost status [--ready] [--json]
 localghost update [--json]
-localghost dev [--config file] [--config-pattern regex]
+localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup]
 localghost print [--config file] [--config-pattern regex]
 ```
 
 ## Description
 
-Localghost reads `.localghost`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local HTTPS proxy. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, and no broad Vite `allowedHosts: true` shortcut.
+Localghost reads `.localghost`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local proxy. HTTP is the default; local HTTPS is explicit with `--https` or `--ssl`. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, no surprise browser tabs, and no broad Vite `allowedHosts: true` shortcut.
 
 Localghost checks npm for newer releases after successful commands. The check is best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
+
+`setup`, `dev`, and `teardown` refuse to run in production-like environments such as `NODE_ENV=production`, `VERCEL_ENV=production`, or `LOCALGHOST_ENV=production`.
 
 ## Commands
 
@@ -56,7 +58,7 @@ Currently checks Caddy and prints `brew install caddy` when missing.
 
 ### setup
 
-Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfile`, and validates it with Caddy. Pass `--config <file>` to look for a specific config file. Repeat `--config` to use the first existing file from an ordered list. Pass `--config-pattern <regex>` to search matching filenames in the project root.
+Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfile`, and validates it with Caddy. Pass `--config <file>` to look for a specific config file. Repeat `--config` to use the first existing file from an ordered list. Pass `--config-pattern <regex>` to search matching filenames in the project root. Pass `--https` or `--ssl` to generate a local HTTPS Caddyfile.
 
 ```sh
 localghost setup --project app
@@ -72,10 +74,10 @@ localghost teardown --remove-caddyfile
 
 ### status
 
-Prints Localghost's project-local state file. Pass `--json` for scripts and agents.
+Prints Localghost's project-local state file and setup readiness. Pass `--ready` to exit non-zero when the hosts block or Caddyfile is missing or stale. Pass `--json` for scripts and agents.
 
 ```sh
-localghost status --json
+localghost status --ready
 ```
 
 ### update
@@ -88,7 +90,7 @@ localghost update
 
 ### routes
 
-Prints the local domain layer as `domain -> upstream` routes. Pass `--http` if the browser-facing domain should be shown as plain HTTP.
+Prints the local domain layer as `domain -> upstream` routes. HTTP is the default. Pass `--https` or `--ssl` if the browser-facing domain should be shown as HTTPS.
 
 ```sh
 localghost routes
@@ -96,7 +98,7 @@ localghost routes
 
 ### dev
 
-Writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`.
+Requires setup to be ready, writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`. HTTP is the default. Pass `--https` or `--ssl` to run a local HTTPS proxy. Pass `--setup` to explicitly allow `dev` to run setup first when setup is missing or stale.
 
 ```sh
 localghost dev

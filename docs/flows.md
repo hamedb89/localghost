@@ -58,13 +58,20 @@ yarn localghost:setup
 
 ## Daily Dev
 
-As a developer, I want a daily command that starts the local HTTPS proxy from the same config file.
+As a developer, I want a daily command that starts the local HTTP proxy from the same config file, with local HTTPS available only when I ask for it.
 
 ```sh
+yarn localghost:ready
 yarn localghost:proxy
 ```
 
 Most repos will run this next to their app server, for example Vite on `127.0.0.1:5173`.
+
+When a repo really needs local certificates:
+
+```sh
+yarn localghost:proxy:https
+```
 
 ## Config Discovery
 
@@ -88,23 +95,25 @@ yarn localghost routes
 
 ```txt
 localghost routes
-  https://app.localhost/ -> http://127.0.0.1:5173
-  https://api.app.localhost/ -> http://127.0.0.1:8787
+  http://app.localhost/ -> http://127.0.0.1:5173
+  http://api.app.localhost/ -> http://127.0.0.1:8787
 ```
 
 `setup` and `dev` print this same map before Caddy is validated or run.
 
 ## Vite Integration
 
-As a Vite user, I want Localghost to set strict `allowedHosts` and print the browser-facing HTTPS URLs.
+As a Vite user, I want Localghost to set the dev host to my configured domain, keep strict `allowedHosts`, print browser-facing URLs, and never run in production/build mode.
 
 ```ts
 import { localGhostPlugin } from "@hamedb89/localghost/vite";
 
 export default {
-  plugins: [localGhostPlugin({ port: 5173, https: true })]
+  plugins: [localGhostPlugin({ port: 5173 })]
 };
 ```
+
+The plugin defaults to HTTP. Pass `https: true` only when Vite is expected to sit behind a Caddy HTTPS proxy. Localghost prints URLs but does not open browser tabs.
 
 ## Teardown
 

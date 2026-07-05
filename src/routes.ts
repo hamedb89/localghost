@@ -12,7 +12,7 @@ export type DomainRouteOptions = {
 };
 
 export function getDomainRoutes(entries: DevHostEntry[], options: DomainRouteOptions = {}): DomainRoute[] {
-  const protocol = options.https === false ? "http" : "https";
+  const protocol = options.https === true ? "https" : "http";
 
   return [...entries]
     .sort((left, right) => left.host.localeCompare(right.host) || left.port - right.port)

@@ -9,9 +9,9 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.3-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/badge/npm-v0.1.4-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
-Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
+Localghost is a tiny Node.js CLI for friendly local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 
 [Website](https://hamedb89.github.io/localghost/) · [npm](https://www.npmjs.com/package/@hamedb89/localghost) · [GitHub](https://github.com/hamedb89/localghost)
 
@@ -20,9 +20,10 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 - Creates and reads `.localghost` in your app repo.
 - Lets repos choose explicit config files or filename patterns when `.localghost` is not enough.
 - Updates only a managed Localghost block in `/etc/hosts` during explicit setup.
-- Generates `ops/local/Caddyfile` for local HTTPS reverse proxying.
+- Generates `ops/local/Caddyfile` for local reverse proxying. HTTP is the default; HTTPS is explicit with `--https` or `--ssl`.
 - Checks whether Caddy is installed, but does not run Homebrew for you.
 - Provides a Vite plugin that sets explicit `server.allowedHosts` entries.
+- Defaults Vite dev to the configured Localghost domain and no-ops during production/build.
 - Prints parsed config and project-local state as JSON for scripts, Codex, agents, and future MCP tools.
 - Checks npm for newer Localghost releases at most once per day, with an explicit opt-out.
 
@@ -83,10 +84,22 @@ First time on a machine:
 yarn localghost:setup
 ```
 
+Check that the hosts block and Caddyfile are ready:
+
+```sh
+yarn localghost:ready
+```
+
 Daily proxy:
 
 ```sh
 yarn localghost:proxy
+```
+
+Use HTTPS only when you explicitly want Caddy local certificates:
+
+```sh
+yarn localghost:proxy:https
 ```
 
 Prefer `.localhost` names. `.local` is supported, but Localghost warns because `.local` can collide with mDNS/Bonjour.
@@ -123,12 +136,16 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
   "scripts": {
     "localghost:setup": "localghost setup",
     "localghost:proxy": "localghost dev",
+    "localghost:proxy:https": "localghost dev --https",
+    "localghost:ready": "localghost status --ready",
     "localghost:print": "localghost print",
     "localghost:routes": "localghost routes",
     "localghost:status": "localghost status",
     "localghost:teardown": "localghost teardown",
     "localghost:doctor": "localghost doctor",
-    "localghost:update": "localghost update"
+    "localghost:update": "localghost update",
+    "caddy:setup": "localghost setup",
+    "caddy:dev": "localghost dev"
   }
 }
 ```
@@ -138,9 +155,20 @@ A full app might compose them with its own servers:
 ```json
 {
   "scripts": {
-    "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:web": "vite --port 5173 --strictPort",
     "dev:api": "wrangler dev --port 8787",
     "dev:local": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run localghost:proxy\""
+  }
+}
+```
+
+In Turborepo, keep Localghost as a persistent uncached task:
+
+```json
+{
+  "tasks": {
+    "dev": { "cache": false, "persistent": true },
+    "localghost:proxy": { "cache": false, "persistent": true }
   }
 }
 ```
@@ -155,26 +183,24 @@ export default defineConfig({
   plugins: [
     localGhostPlugin({
       port: 5173,
-      https: true,
       configFiles: [".localghost.private", ".localghost"]
     })
   ]
 });
 ```
 
-The plugin generates an explicit `server.allowedHosts` list from the selected config file; it does not set `allowedHosts: true`.
+The plugin sets Vite's dev host to the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops.
 
 When Vite starts, Localghost prints the browser-facing URLs:
 
 ```txt
 localghost
-open:   https://app.localhost/
-also:   https://www.app.localhost/
+local:  http://app.localhost/
+also:   http://www.app.localhost/
 target: http://127.0.0.1:5173/
-proxy:  Caddy local HTTPS
 ```
 
-`https: true` means the browser-facing URL is expected to go through Caddy on HTTPS, while Vite still runs behind it on `127.0.0.1:<port>`. The plugin uses that to set Vite websocket/HMR proxy settings and to print `https://...` local host URLs.
+`https: true` means the browser-facing URL is expected to go through Caddy on HTTPS, while Vite still runs behind it on `127.0.0.1:<port>`. The plugin uses that to set Vite websocket/HMR proxy settings and to print `https://...` local host URLs. Localghost never opens browser tabs by default.
 
 Set `log: false` if you want to keep Vite's default terminal output only.
 
@@ -187,16 +213,21 @@ localghost doctor
 localghost setup
 localghost setup --project app
 localghost setup --config .localghost.preview
+localghost setup --https
 localghost status
+localghost status --ready
 localghost teardown
 localghost teardown --remove-caddyfile
 localghost update
 localghost --no-update-check doctor
 localghost dev --config-pattern '^\.localghost\.'
+localghost dev --https
 localghost print
 ```
 
 Localghost checks npm for newer releases after successful commands. The check has a short timeout, is cached for 24 hours, and never fails the command. Disable it with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`. Run `localghost update` when you want an explicit update check.
+
+`setup`, `dev`, and `teardown` refuse to run in production-like environments such as `NODE_ENV=production`, `VERCEL_ENV=production`, or `LOCALGHOST_ENV=production`.
 
 `setup` writes only a managed block in the system hosts file:
 
@@ -210,12 +241,15 @@ Localghost does not rewrite the whole hosts file. It replaces only its own manag
 
 ## Teardown And State
 
-`setup` writes a project-local state file at `ops/local/localghost-state.json`. It records the last Localghost action, selected config path, generated Caddyfile path, hosts file path, and the host entries that were applied. This is durable enough for project tooling and avoids relying on OS temp folders for tracking. Most apps should treat it as generated local state and ignore it in git.
+`setup` writes a project-local state file at `ops/local/localghost-state.json`. It records the last Localghost action, selected config path, generated Caddyfile path, hosts file path, proxy mode, and the host entries that were applied. This is durable enough for project tooling and avoids relying on OS temp folders for tracking. Most apps should treat it as generated local state and ignore it in git.
 
 ```sh
 localghost status
+localghost status --ready
 localghost status --json
 ```
+
+`localghost dev` requires setup to be ready before it starts Caddy. If setup is missing or stale, it prints the exact `localghost setup` command instead of silently running `sudo`. Use `localghost dev --setup` only when you explicitly want the dev command to perform setup first.
 
 When a project no longer needs Localghost, teardown removes only the managed hosts block for the selected project:
 

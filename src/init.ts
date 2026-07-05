@@ -82,12 +82,16 @@ function updatePackageScripts(packageJsonPath: string, configFile: string): bool
     ...scripts,
     "localghost:setup": scripts["localghost:setup"] ?? `localghost setup${configFlag}`,
     "localghost:proxy": scripts["localghost:proxy"] ?? `localghost dev${configFlag}`,
+    "localghost:proxy:https": scripts["localghost:proxy:https"] ?? `localghost dev${configFlag} --https`,
+    "localghost:ready": scripts["localghost:ready"] ?? `localghost status${configFlag} --ready`,
     "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
     "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
     "localghost:status": scripts["localghost:status"] ?? "localghost status",
     "localghost:teardown": scripts["localghost:teardown"] ?? "localghost teardown",
     "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor",
-    "localghost:update": scripts["localghost:update"] ?? "localghost update"
+    "localghost:update": scripts["localghost:update"] ?? "localghost update",
+    "caddy:setup": scripts["caddy:setup"] ?? `localghost setup${configFlag}`,
+    "caddy:dev": scripts["caddy:dev"] ?? `localghost dev${configFlag}`
   };
 
   const changed = JSON.stringify(scripts) !== JSON.stringify(nextScripts);
@@ -119,6 +123,7 @@ export function initLocalghost(options: InitOptions = {}): InitResult {
       nextSteps: [
         packageRunCommand(packageManager, "localghost:doctor"),
         packageRunCommand(packageManager, "localghost:setup"),
+        packageRunCommand(packageManager, "localghost:ready"),
         packageRunCommand(packageManager, "localghost:proxy")
       ]
     };
@@ -138,6 +143,7 @@ export function initLocalghost(options: InitOptions = {}): InitResult {
     nextSteps: [
       packageRunCommand(packageManager, "localghost:doctor"),
       packageRunCommand(packageManager, "localghost:setup"),
+      packageRunCommand(packageManager, "localghost:ready"),
       packageRunCommand(packageManager, "localghost:proxy")
     ]
   };
