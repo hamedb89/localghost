@@ -11,7 +11,7 @@ Buh. Friendly local hostnames for app repos.
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
 [![npm version](https://img.shields.io/badge/npm-v0.1.8-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
-Localghost is a tiny Node.js CLI for friendly local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `http://app.localhost/` instead of remembering which localhost port belongs to which process.
+Localghost is a tiny Node.js CLI for friendly local domains in app repos. Add it as a dev dependency, run `yarn dev`, and use `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 
 [Website](https://hamedb89.github.io/localghost/) · [npm](https://www.npmjs.com/package/@hamedb89/localghost) · [GitHub](https://github.com/hamedb89/localghost)
 
@@ -40,21 +40,62 @@ Localghost is a tiny Node.js CLI for friendly local domains in app repos. It giv
   <img src="./assets/localghost-app-icon.png" alt="Localghost app icon" width="180">
 </p>
 
-## Install
+## Start Here
 
 ```sh
 yarn add -D @hamedb89/localghost
 ```
 
-## Quick Start
+That is the entrypoint you are optimizing for: install the dev dependency, keep using the dev command your team already knows, and let Localghost handle the local-domain setup around it.
 
-Create the project config and optional package scripts:
+For Vite apps, add the plugin once:
 
-```sh
-yarn localghost init --write-scripts
+```ts
+import { defineConfig } from "vite";
+import { localGhostPlugin } from "@hamedb89/localghost/vite";
+
+export default defineConfig({
+  plugins: [localGhostPlugin()]
+});
 ```
 
-This creates `.localghost`:
+Now your daily command is just:
+
+```sh
+yarn dev
+```
+
+And you are ready.
+
+On the first interactive `yarn dev`, Localghost can create `.localghost`, explain the `/etc/hosts` change, write the local Caddyfile, and then print the browser-facing URL:
+
+```txt
+localghost
+local:  http://app.localhost/
+also:   http://www.app.localhost/
+target: http://127.0.0.1:5173/
+```
+
+If your project does not use Vite, or you want one command that starts Caddy and then your app process, wrap your raw dev script:
+
+```json
+{
+  "scripts": {
+    "dev": "localghost run -- yarn dev:raw",
+    "dev:raw": "next dev"
+  }
+}
+```
+
+Then the daily command stays the same:
+
+```sh
+yarn dev
+```
+
+## Configuration
+
+Most apps only need a `.localghost` file when they want explicit hostnames or multiple services:
 
 ```txt
 # Buh. Friendly names for local services.
@@ -62,6 +103,12 @@ This creates `.localghost`:
 app.localhost 5173
 www.app.localhost 5173
 api.app.localhost 8787
+```
+
+If `.localghost` is missing, the Vite plugin can prompt to create it during `yarn dev`. You can also create it directly:
+
+```sh
+yarn localghost init
 ```
 
 Check the machine:
@@ -78,41 +125,41 @@ Run: brew install caddy
 Localghost will not install it for you. No surprise spells.
 ```
 
-First time on a machine:
+Prepare or repair the machine setup directly:
 
 ```sh
-yarn localghost:setup
+yarn localghost setup
 ```
 
 Check that the hosts block and Caddyfile are ready:
 
 ```sh
-yarn localghost:ready
+yarn localghost status --ready
 ```
 
-Daily proxy:
+Run only the proxy when your app server is started separately:
 
 ```sh
-yarn localghost:proxy
+yarn localghost dev
 ```
 
 Use HTTPS only when you explicitly want Caddy local certificates:
 
 ```sh
-yarn localghost:proxy:https
+yarn localghost dev --https
 ```
 
 Trust Caddy's local HTTPS CA when you want browsers to stop showing local certificate warnings:
 
 ```sh
-yarn localghost:trust
+yarn localghost trust
 ```
 
 Reset generated setup without deleting `.localghost`:
 
 ```sh
-yarn localghost:reset
-yarn localghost:setup
+yarn localghost reset
+yarn localghost setup
 ```
 
 Prefer `.localhost` names. `.local` is supported, but Localghost warns because `.local` can collide with mDNS/Bonjour.
@@ -240,7 +287,7 @@ Pass `--json` when another helper, such as a menu bar app, needs to poll the sam
 
 ## macOS Widget
 
-Localghost includes a tiny native macOS widget in `apps/macos-widget`. It shows `LG n` in the top bar and opens a small floating desktop panel with the Localghost route list, target ports, and listening state.
+Localghost includes a tiny native macOS widget in `apps/macos-widget`. One widget tracks all active Localghost sessions across the machine. It shows `LG n` in the top bar and opens a small floating desktop panel with the Localghost route list, target ports, and listening state.
 
 Build it from source:
 

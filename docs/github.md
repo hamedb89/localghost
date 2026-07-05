@@ -4,11 +4,11 @@ Use this copy for the GitHub repo About box, topics, and social cards. Keep it s
 
 ## Repository Description
 
-Friendly local hostnames for app repos. A tiny CLI for `.localghost` configs, `/etc/hosts` blocks, Caddy reverse proxies, and Vite `allowedHosts`.
+Friendly local hostnames for app repos. Install the dev dependency, run `yarn dev`, and get clean `.localhost` URLs with Caddy and Vite-safe hosts.
 
 Shorter alternative:
 
-Friendly local hostnames for app repos, powered by `.localghost`, Caddy, `/etc/hosts`, and Vite.
+Friendly local hostnames for app repos. `yarn add -D`, `yarn dev`, ready.
 
 ## Topics
 
@@ -62,7 +62,7 @@ After creating `hamedb89/localghost`, this sets the public repo metadata:
 
 ```sh
 gh repo edit hamedb89/localghost \
-  --description "Friendly local hostnames for app repos. A tiny CLI for .localghost configs, /etc/hosts blocks, Caddy reverse proxies, and Vite allowedHosts." \
+  --description "Friendly local hostnames for app repos. Install the dev dependency, run yarn dev, and get clean .localhost URLs with Caddy and Vite-safe hosts." \
   --homepage "https://hamedb89.github.io/localghost/" \
   --add-topic localhost \
   --add-topic local-development \
@@ -78,13 +78,13 @@ gh repo edit hamedb89/localghost \
 
 ## README Opening Shape
 
-The first visible paragraph should say what it is, who it is for, and what tools it touches:
+The first visible paragraph should make the entrypoint feel obvious before it gets into configuration:
 
 ```txt
-Localghost is a tiny Node.js CLI for local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file.
+Localghost is a tiny Node.js CLI for friendly local domains in app repos. Add it as a dev dependency, run `yarn dev`, and use `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 ```
 
-That phrasing helps GitHub search and npm search without making the README feel like SEO sludge.
+Then the next docs layer can explain `.localghost`, Caddy, `/etc/hosts`, Vite `allowedHosts`, and configuration options.
 
 ## GitHub Pages
 

@@ -1,19 +1,54 @@
 import AppKit
+import Darwin
 import Foundation
 
-struct LocalghostPsResponse: Decodable {
-    let activityPath: String?
-    let runs: [LocalghostRun]
+struct LocalghostActivityFile: Decodable {
+    let runs: [LocalghostActivityRun]?
+    let setups: [LocalghostActivitySetup]?
 }
 
 struct LocalghostRun: Decodable {
+    let mode: String
+    let pid: Int?
+    let cwd: String
+    let projectName: String
+    let running: Bool?
+    let startedAt: String?
+    let updatedAt: String?
+    let childCommand: [String]?
+    let routes: [LocalghostRoute]
+}
+
+struct LocalghostActivityRun: Decodable {
+    let id: String
     let mode: String
     let pid: Int
     let cwd: String
     let projectName: String
     let startedAt: String
+    let updatedAt: String
+    let configPath: String?
+    let caddyfilePath: String?
     let childCommand: [String]?
-    let routes: [LocalghostRoute]
+    let https: Bool?
+    let entries: [LocalghostEntry]
+}
+
+struct LocalghostActivitySetup: Decodable {
+    let id: String
+    let cwd: String
+    let projectName: String
+    let updatedAt: String
+    let configPath: String?
+    let caddyfilePath: String?
+    let https: Bool?
+    let entries: [LocalghostEntry]
+}
+
+struct LocalghostEntry: Decodable {
+    let host: String
+    let port: Int
+    let target: String?
 }
 
 struct LocalghostRoute: Decodable {
@@ -23,8 +58,14 @@ struct LocalghostRoute: Decodable {
     let listening: Bool
 }
 
+extension LocalghostRun {
+    var isRunning: Bool {
+        running ?? (pid != nil)
+    }
+}
+
 final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private var timer: Timer?
     private var latestRuns: [LocalghostRun] = []
     private var latestError: String?
@@ -36,7 +77,10 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         NSApp.applicationIconImage = LocalghostAssets.whiteLogo
         if let button = statusItem.button {
             button.image = LocalghostAssets.templateLogo
-            button.title = " LG ..."
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyUpOrDown
+            button.title = ""
+            button.toolTip = "Localghost"
         }
         showDesktopWidget()
         rebuildMenu()
@@ -68,11 +112,12 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private func updateStatusTitle() {
         if latestError != nil {
-            statusItem.button?.title = " LG ?"
+            statusItem.button?.toolTip = "Localghost status unavailable"
             return
         }
 
-        statusItem.button?.title = " LG \(latestRuns.count)"
+        let runningCount = latestRuns.filter { $0.isRunning }.count
+        statusItem.button?.toolTip = "Localghost: \(runningCount) running, \(latestRuns.count) setup"
     }
 
     private func rebuildMenu() {
@@ -87,11 +132,12 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
             detail.isEnabled = false
             menu.addItem(detail)
         } else if latestRuns.isEmpty {
-            let item = NSMenuItem(title: "No Localghost apps running", action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: "No Localghost setups found", action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
         } else {
-            let title = latestRuns.count == 1 ? "1 Localghost app running" : "\(latestRuns.count) Localghost apps running"
+            let runningCount = latestRuns.filter { $0.isRunning }.count
+            let title = "\(runningCount) running, \(latestRuns.count) setup"
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu.addItem(item)
@@ -122,8 +168,9 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private func addRun(_ run: LocalghostRun, to menu: NSMenu) {
         let command = run.childCommand?.joined(separator: " ")
-        let mode = command.map { "\(run.mode): \($0)" } ?? run.mode
-        let title = "\(run.projectName)  \(mode)"
+        let mode = command.map { "\(run.mode): \($0)" } ?? (run.mode == "setup" ? "" : run.mode)
+        let state = run.isRunning ? "running" : "setup"
+        let title = mode.isEmpty ? "\(run.projectName)  \(state)" : "\(run.projectName)  \(state)  \(mode)"
         let projectItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         projectItem.isEnabled = false
         menu.addItem(projectItem)
@@ -132,9 +179,11 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         cwdItem.isEnabled = false
         menu.addItem(cwdItem)
 
-        let pidItem = NSMenuItem(title: "  pid \(run.pid)", action: nil, keyEquivalent: "")
-        pidItem.isEnabled = false
-        menu.addItem(pidItem)
+        if let pid = run.pid {
+            let pidItem = NSMenuItem(title: "  pid \(pid)", action: nil, keyEquivalent: "")
+            pidItem.isEnabled = false
+            menu.addItem(pidItem)
+        }
 
         for route in run.routes {
             let state = route.listening ? "listening" : "not listening"
@@ -200,57 +249,125 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private static func loadRuns() -> Result<[LocalghostRun], Error> {
         do {
-            let output = try runLocalghostPs()
-            let response = try JSONDecoder().decode(LocalghostPsResponse.self, from: output)
-            return .success(response.runs)
+            return .success(try loadActivityInstances())
         } catch {
             return .failure(error)
         }
     }
 
-    private static func runLocalghostPs() throws -> Data {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        task.arguments = localghostArguments()
-        task.environment = [
-            "PATH": pathValue()
-        ]
-
-        let stdout = Pipe()
-        let stderr = Pipe()
-        task.standardOutput = stdout
-        task.standardError = stderr
-
-        try task.run()
-        task.waitUntilExit()
-
-        let output = stdout.fileHandleForReading.readDataToEndOfFile()
-        if task.terminationStatus == 0 {
-            return output
+    private static func loadActivityInstances() throws -> [LocalghostRun] {
+        let path = activityPath()
+        if !FileManager.default.fileExists(atPath: path) {
+            return []
         }
 
-        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-        let message = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        throw LocalghostWidgetError.commandFailed(message?.isEmpty == false ? message! : "localghost ps failed")
-    }
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        let activity = try JSONDecoder().decode(LocalghostActivityFile.self, from: data)
+        let activeRuns = (activity.runs ?? []).filter { isProcessRunning($0.pid) }
+        let runBySetup = Dictionary(uniqueKeysWithValues: activeRuns.map { (activityKey(projectName: $0.projectName, cwd: $0.cwd, configPath: $0.configPath), $0) })
+        var instances: [LocalghostRun] = []
+        var consumedRunKeys = Set<String>()
 
-    private static func localghostCommand() -> String {
-        ProcessInfo.processInfo.environment["LOCALGHOST_CLI"] ?? "localghost"
-    }
-
-    private static func localghostArguments() -> [String] {
-        let command = localghostCommand()
-        if command.hasSuffix(".js") {
-            return ["node", command, "--no-update-check", "ps", "--json"]
+        for setup in activity.setups ?? [] {
+            let key = activityKey(projectName: setup.projectName, cwd: setup.cwd, configPath: setup.configPath)
+            if let run = runBySetup[key] {
+                consumedRunKeys.insert(key)
+                instances.append(instance(from: run, setup: setup))
+            } else {
+                instances.append(instance(from: setup))
+            }
         }
 
-        return [command, "--no-update-check", "ps", "--json"]
+        for run in activeRuns {
+            let key = activityKey(projectName: run.projectName, cwd: run.cwd, configPath: run.configPath)
+            if !consumedRunKeys.contains(key) {
+                instances.append(instance(from: run, setup: nil))
+            }
+        }
+
+        return instances.sorted {
+            if $0.isRunning != $1.isRunning { return $0.isRunning && !$1.isRunning }
+            return $0.projectName.localizedCaseInsensitiveCompare($1.projectName) == .orderedAscending
+        }
     }
 
-    private static func pathValue() -> String {
-        let existing = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let defaults = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        return existing.isEmpty ? defaults : "\(existing):\(defaults)"
+    private static func instance(from setup: LocalghostActivitySetup) -> LocalghostRun {
+        LocalghostRun(
+            mode: "setup",
+            pid: nil,
+            cwd: setup.cwd,
+            projectName: setup.projectName,
+            running: false,
+            startedAt: nil,
+            updatedAt: setup.updatedAt,
+            childCommand: nil,
+            routes: setup.entries.map { route(from: $0, forceListening: false) }
+        )
+    }
+
+    private static func instance(from run: LocalghostActivityRun, setup: LocalghostActivitySetup?) -> LocalghostRun {
+        LocalghostRun(
+            mode: run.mode,
+            pid: run.pid,
+            cwd: run.cwd,
+            projectName: run.projectName,
+            running: true,
+            startedAt: run.startedAt,
+            updatedAt: setup?.updatedAt ?? run.updatedAt,
+            childCommand: run.childCommand,
+            routes: run.entries.map { route(from: $0, forceListening: true) }
+        )
+    }
+
+    private static func route(from entry: LocalghostEntry, forceListening: Bool) -> LocalghostRoute {
+        LocalghostRoute(
+            host: entry.host,
+            port: entry.port,
+            target: entry.target ?? "127.0.0.1:\(entry.port)",
+            listening: forceListening || isPortListening(entry.port)
+        )
+    }
+
+    private static func activityKey(projectName: String, cwd: String, configPath: String?) -> String {
+        "\(projectName):\(cwd):\(configPath ?? "")"
+    }
+
+    private static func activityPath() -> String {
+        let environment = ProcessInfo.processInfo.environment
+        if let path = environment["LOCALGHOST_ACTIVITY_PATH"], !path.isEmpty {
+            return path
+        }
+
+        let stateRoot = environment["XDG_STATE_HOME"] ?? "\(NSHomeDirectory())/.local/state"
+        return "\(stateRoot)/localghost/activity.json"
+    }
+
+    private static func isProcessRunning(_ pid: Int) -> Bool {
+        if pid < 1 { return false }
+        let result = Darwin.kill(pid_t(pid), 0)
+        return result == 0 || errno == EPERM
+    }
+
+    private static func isPortListening(_ port: Int) -> Bool {
+        if port < 1 || port > 65535 { return false }
+
+        let descriptor = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        if descriptor < 0 { return false }
+        defer { Darwin.close(descriptor) }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)
+
+        let result = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
+                Darwin.connect(descriptor, socketAddress, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+
+        return result == 0
     }
 }
 
@@ -320,10 +437,6 @@ final class LocalghostDesktopWidgetView: NSView {
         let status = statusText()
         drawDot(at: NSPoint(x: 42, y: 113), radius: 5, color: statusColor)
         drawText(status, at: NSPoint(x: 58, y: 104), font: .systemFont(ofSize: 15, weight: .medium), color: muted)
-
-        if let logo = LocalghostAssets.whiteLogo {
-            logo.draw(in: NSRect(x: 238, y: 31, width: 78, height: 78), from: .zero, operation: .sourceOver, fraction: 0.94)
-        }
 
         drawDivider(y: 134)
     }
@@ -424,6 +537,7 @@ enum LocalghostAssets {
     static var templateLogo: NSImage? {
         let image = processedLogo(color: .black)
         image?.isTemplate = true
+        image?.size = NSSize(width: 18, height: 18)
         return image
     }
 
@@ -464,6 +578,10 @@ enum LocalghostAssets {
         let red = UInt8(max(0, min(255, rgb.redComponent * 255)))
         let green = UInt8(max(0, min(255, rgb.greenComponent * 255)))
         let blue = UInt8(max(0, min(255, rgb.blueComponent * 255)))
+        var minX = width
+        var minY = height
+        var maxX = 0
+        var maxY = 0
 
         for offset in stride(from: 0, to: pixels.count, by: bytesPerPixel) {
             let brightness = (Int(pixels[offset]) + Int(pixels[offset + 1]) + Int(pixels[offset + 2])) / 3
@@ -472,13 +590,35 @@ enum LocalghostAssets {
                 pixels[offset + 1] = green
                 pixels[offset + 2] = blue
                 pixels[offset + 3] = 255
+                let pixelIndex = offset / bytesPerPixel
+                let x = pixelIndex % width
+                let y = pixelIndex / width
+                minX = min(minX, x)
+                minY = min(minY, y)
+                maxX = max(maxX, x)
+                maxY = max(maxY, y)
             } else {
                 pixels[offset + 3] = 0
             }
         }
 
         guard let output = context.makeImage() else { return nil }
-        return NSImage(cgImage: output, size: NSSize(width: width, height: height))
+        if minX > maxX || minY > maxY {
+            return NSImage(cgImage: output, size: NSSize(width: width, height: height))
+        }
+
+        let padding = max(8, Int(Double(max(maxX - minX, maxY - minY)) * 0.08))
+        let cropX = max(0, minX - padding)
+        let cropY = max(0, minY - padding)
+        let cropMaxX = min(width - 1, maxX + padding)
+        let cropMaxY = min(height - 1, maxY + padding)
+        let cropRect = CGRect(x: cropX, y: cropY, width: cropMaxX - cropX + 1, height: cropMaxY - cropY + 1)
+
+        guard let cropped = output.cropping(to: cropRect) else {
+            return NSImage(cgImage: output, size: NSSize(width: width, height: height))
+        }
+
+        return NSImage(cgImage: cropped, size: NSSize(width: cropRect.width, height: cropRect.height))
     }
 }
 

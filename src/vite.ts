@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { normalize, resolve } from "node:path";
 import type { ConfigEnv, HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
+import { registerLocalghostRun, registerLocalghostSetup, unregisterLocalghostRun } from "./activity.js";
 import {
   getConfigFileCandidates,
   getProjectName,
@@ -176,6 +177,14 @@ async function setupProject(cwd: string, entries: DevHostEntry[], configPath: st
     caddyHttps: https,
     entries
   });
+  registerLocalghostSetup({
+    cwd,
+    projectName,
+    configPath,
+    caddyfilePath,
+    https,
+    entries
+  });
 }
 
 async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePort: number, https: boolean | undefined) {
@@ -224,7 +233,9 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
   let resolvedEntries: DevHostEntry[] = [];
   let resolvedVitePort: number | undefined;
   let resolvedHttps = false;
+  let resolvedContext: LocalghostContext | undefined;
   let restartTimer: NodeJS.Timeout | undefined;
+  let activityRunId: string | undefined;
 
   return {
     name: "localghost:vite",
@@ -249,6 +260,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
       resolvedEntries = entries;
       resolvedVitePort = context.port;
       resolvedHttps = context.https;
+      resolvedContext = context;
 
       const server: ServerOptions = {
         ...existingServer,
@@ -326,6 +338,33 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
           printLocalHosts(server, resolvedEntries, resolvedVitePort, resolvedHttps);
         };
       }
+
+      if (resolvedContext) {
+        const run = registerLocalghostRun({
+          id: `${resolvedContext.projectName}:vite:${process.pid}:${resolvedContext.cwd}`,
+          mode: "vite",
+          pid: process.pid,
+          cwd: resolvedContext.cwd,
+          projectName: resolvedContext.projectName,
+          configPath: resolvedContext.configPath,
+          childCommand: ["vite"],
+          https: resolvedContext.https,
+          requestedPort: resolvedContext.requestedPort,
+          port: resolvedContext.port,
+          dynamicPort: resolvedContext.dynamicPort,
+          entries: resolvedContext.entries
+        });
+        activityRunId = run.id;
+      }
+
+      const cleanupActivity = () => {
+        if (!activityRunId) return;
+        unregisterLocalghostRun(activityRunId);
+        activityRunId = undefined;
+      };
+
+      server.httpServer?.once("close", cleanupActivity);
+      process.once("exit", cleanupActivity);
     }
   };
 }

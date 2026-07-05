@@ -4,10 +4,14 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
 import {
   getLocalghostActivityPath,
+  listLocalghostSetups,
   listLocalghostRuns,
   registerLocalghostRun,
+  registerLocalghostSetup,
+  unregisterLocalghostSetup,
   unregisterLocalghostRun,
-  type LocalghostRunRecord
+  type LocalghostRunRecord,
+  type LocalghostSetupRecord
 } from "./activity.js";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
 import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy, trustCaddy } from "./caddy.js";
@@ -224,6 +228,14 @@ async function runSetupFromReadiness(
     ...existingTrustMarkers(cwd),
     entries: readiness.entries
   });
+  registerLocalghostSetup({
+    cwd,
+    projectName: readiness.projectName,
+    configPath: readiness.configPath,
+    caddyfilePath,
+    https,
+    entries: readiness.entries
+  });
 }
 
 function wait(ms: number) {
@@ -275,13 +287,29 @@ async function maybeTrustCaddy(
   await runTrust(options.cwd, options.caddyfilePath);
 }
 
-type LocalghostRunView = LocalghostRunRecord & {
-  routes: Array<{
-    host: string;
-    port: number;
-    target: string;
-    listening: boolean;
-  }>;
+type LocalghostRouteView = {
+  host: string;
+  port: number;
+  target: string;
+  listening: boolean;
+};
+
+type LocalghostInstanceView = {
+  id: string;
+  cwd: string;
+  projectName: string;
+  running: boolean;
+  mode: LocalghostRunRecord["mode"] | "setup";
+  updatedAt?: string;
+  startedAt?: string;
+  pid?: number;
+  caddyPid?: number;
+  childPid?: number;
+  childCommand?: string[];
+  configPath?: string;
+  caddyfilePath?: string;
+  https?: boolean;
+  routes: LocalghostRouteView[];
 };
 
 function maybePid(pid: number | undefined) {
@@ -304,39 +332,103 @@ function registerCleanup(id: string) {
   };
 }
 
-async function getRunView(run: LocalghostRunRecord): Promise<LocalghostRunView> {
+async function getRouteViews(entries: DevHostEntry[]): Promise<LocalghostRouteView[]> {
   const portStatus = new Map<number, boolean>();
 
-  for (const entry of run.entries) {
+  for (const entry of entries) {
     if (!portStatus.has(entry.port)) {
       portStatus.set(entry.port, !(await isPortAvailable(entry.port)));
     }
   }
 
+  return entries.map((entry) => ({
+    host: entry.host,
+    port: entry.port,
+    target: `127.0.0.1:${entry.port}`,
+    listening: portStatus.get(entry.port) ?? false
+  }));
+}
+
+function setupKey(input: Pick<LocalghostSetupRecord, "cwd" | "projectName" | "configPath">) {
+  return `${input.projectName}:${input.cwd}:${input.configPath ?? ""}`;
+}
+
+function runKey(input: Pick<LocalghostRunRecord, "cwd" | "projectName" | "configPath">) {
+  return `${input.projectName}:${input.cwd}:${input.configPath ?? ""}`;
+}
+
+async function getInstanceViews(setups: LocalghostSetupRecord[], runs: LocalghostRunRecord[]): Promise<LocalghostInstanceView[]> {
+  const runBySetup = new Map(runs.map((run) => [runKey(run), run]));
+  const instances: LocalghostInstanceView[] = [];
+
+  for (const setup of setups) {
+    const run = runBySetup.get(setupKey(setup));
+    if (run) {
+      instances.push(await getRunInstanceView(run, setup));
+      runBySetup.delete(setupKey(setup));
+      continue;
+    }
+
+    instances.push({
+      id: setup.id,
+      cwd: setup.cwd,
+      projectName: setup.projectName,
+      running: false,
+      mode: "setup",
+      updatedAt: setup.updatedAt,
+      ...(setup.configPath ? { configPath: setup.configPath } : {}),
+      ...(setup.caddyfilePath ? { caddyfilePath: setup.caddyfilePath } : {}),
+      ...(typeof setup.https === "boolean" ? { https: setup.https } : {}),
+      routes: await getRouteViews(setup.entries)
+    });
+  }
+
+  for (const run of runBySetup.values()) {
+    instances.push(await getRunInstanceView(run));
+  }
+
+  return instances.sort((left, right) => {
+    if (left.running !== right.running) return left.running ? -1 : 1;
+    return left.projectName.localeCompare(right.projectName);
+  });
+}
+
+async function getRunInstanceView(run: LocalghostRunRecord, setup?: LocalghostSetupRecord): Promise<LocalghostInstanceView> {
   return {
-    ...run,
-    routes: run.entries.map((entry) => ({
-      host: entry.host,
-      port: entry.port,
-      target: `127.0.0.1:${entry.port}`,
-      listening: portStatus.get(entry.port) ?? false
-    }))
+    id: setup?.id ?? run.id,
+    cwd: run.cwd,
+    projectName: run.projectName,
+    running: true,
+    mode: run.mode,
+    updatedAt: setup?.updatedAt ?? run.updatedAt,
+    startedAt: run.startedAt,
+    pid: run.pid,
+    ...(run.caddyPid ? { caddyPid: run.caddyPid } : {}),
+    ...(run.childPid ? { childPid: run.childPid } : {}),
+    ...(run.childCommand ? { childCommand: run.childCommand } : {}),
+    ...(run.configPath ? { configPath: run.configPath } : {}),
+    ...(run.caddyfilePath ? { caddyfilePath: run.caddyfilePath } : {}),
+    ...(typeof run.https === "boolean" ? { https: run.https } : {}),
+    routes: await getRouteViews(run.entries)
   };
 }
 
-function formatRunViews(runs: LocalghostRunView[]) {
-  if (runs.length === 0) return "No Localghost apps are running.";
+function formatInstanceViews(instances: LocalghostInstanceView[]) {
+  if (instances.length === 0) return "No Localghost setups found.";
 
   const lines = ["localghost ps"];
-  for (const run of runs) {
-    const command = run.childCommand?.length ? ` ${run.childCommand.join(" ")}` : "";
-    const mode = command ? `${run.mode}:${command}` : run.mode;
+  for (const instance of instances) {
+    const command = instance.childCommand?.length ? ` ${instance.childCommand.join(" ")}` : "";
+    const mode = command ? `${instance.mode}:${command}` : instance.mode === "setup" ? "" : instance.mode;
     lines.push("");
-    lines.push(`${run.projectName}  ${mode}`);
-    lines.push(`  cwd: ${run.cwd}`);
-    lines.push(`  pid: ${run.pid}${run.caddyPid ? `, caddy: ${run.caddyPid}` : ""}${run.childPid ? `, child: ${run.childPid}` : ""}`);
-    lines.push(`  started: ${run.startedAt}`);
-    for (const route of run.routes) {
+    lines.push(`${instance.projectName}  ${instance.running ? "running" : "setup"}${mode ? `  ${mode}` : ""}`);
+    lines.push(`  cwd: ${instance.cwd}`);
+    if (instance.pid) {
+      lines.push(`  pid: ${instance.pid}${instance.caddyPid ? `, caddy: ${instance.caddyPid}` : ""}${instance.childPid ? `, child: ${instance.childPid}` : ""}`);
+    }
+    if (instance.startedAt) lines.push(`  started: ${instance.startedAt}`);
+    if (!instance.startedAt && instance.updatedAt) lines.push(`  setup: ${instance.updatedAt}`);
+    for (const route of instance.routes) {
       lines.push(`  ${route.host} -> ${route.target} (${route.listening ? "listening" : "not listening"})`);
     }
   }
@@ -499,6 +591,14 @@ program
       ...existingTrustMarkers(options.cwd),
       entries
     });
+    registerLocalghostSetup({
+      cwd: options.cwd,
+      projectName,
+      configPath,
+      caddyfilePath: caddyfile,
+      https,
+      entries
+    });
 
     console.log(`Generated ${caddyfile}`);
     console.log(`Mode ${https ? "HTTPS" : "HTTP"}`);
@@ -568,6 +668,7 @@ program
       console.log(`No Localghost hosts block found in ${hostsResult.hostsPath}`);
     }
 
+    unregisterLocalghostSetup({ cwd: options.cwd, projectName });
     console.log(".localghost was left in place. Run localghost setup when you are ready.");
   });
 
@@ -611,6 +712,7 @@ program
       console.log(caddyfileRemoved ? `Removed ${caddyfilePath}` : `${caddyfilePath} was not present`);
     }
 
+    unregisterLocalghostSetup({ cwd: options.cwd, projectName });
     console.log(`State ${statePath}`);
   });
 
@@ -741,6 +843,14 @@ program
         caddyfilePath,
         caddyHttps: https,
         ...existingTrustMarkers(options.cwd),
+        entries: readiness.entries
+      });
+      registerLocalghostSetup({
+        cwd: options.cwd,
+        projectName: readiness.projectName,
+        configPath: readiness.configPath,
+        caddyfilePath,
+        https,
         entries: readiness.entries
       });
     }
@@ -915,17 +1025,19 @@ program
 
 program
   .command("ps")
-  .description("Show Localghost dev sessions that are currently running")
+  .description("Show Localghost setups and currently running sessions")
   .option("--json", "Print raw JSON")
   .action(async (options: { json?: boolean }) => {
-    const runs = await Promise.all(listLocalghostRuns().map((run) => getRunView(run)));
+    const setups = listLocalghostSetups();
+    const runs = listLocalghostRuns();
+    const instances = await getInstanceViews(setups, runs);
 
     if (options.json) {
-      console.log(JSON.stringify({ activityPath: getLocalghostActivityPath(), runs }, null, 2));
+      console.log(JSON.stringify({ activityPath: getLocalghostActivityPath(), setups, runs, instances }, null, 2));
       return;
     }
 
-    console.log(formatRunViews(runs));
+    console.log(formatInstanceViews(instances));
   });
 
 program
