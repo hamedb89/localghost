@@ -120,7 +120,7 @@ npm run release:check
 
 That command typechecks, builds the package, builds the static site, and runs `npm pack --dry-run`.
 
-`.github/workflows/publish-npm.yml` publishes to npm from a published GitHub release or manual workflow dispatch. The workflow reruns `npm run release:check` before publishing and uses:
+`.github/workflows/publish-npm.yml` publishes to npm when a `v*` tag is pushed, or from manual workflow dispatch. The workflow checks that tag names match `package.json` versions, reruns `npm run release:check`, and then uses:
 
 ```sh
 npm publish --access public
@@ -154,7 +154,7 @@ npm version patch
 git push origin main --tags
 ```
 
-Then create a GitHub release for the new tag, or run the `Publish npm` workflow manually for that tag. The npm publish workflow reruns `npm run release:check` before publishing.
+Pushing the `v*` tag starts the npm publish workflow automatically. The workflow reruns `npm run release:check` before publishing. Create the GitHub release afterwards if you want release notes on GitHub.
 
 If publishing from a local terminal instead of GitHub Actions, omit provenance and provide the npm two-factor code:
 
