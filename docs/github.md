@@ -123,8 +123,10 @@ That command typechecks, builds the package, builds the static site, and runs `n
 `.github/workflows/publish-npm.yml` publishes to npm when a `v*` tag is pushed, or from manual workflow dispatch. The workflow checks that tag names match `package.json` versions, reruns `npm run release:check`, and then uses:
 
 ```sh
-npm publish --access public
+npm run publish:public
 ```
+
+That package script runs `npm publish --access public --provenance`.
 
 Configure npm trusted publishing for `hamedb89/localghost` before relying on the release workflow. On npmjs.com, open the package settings and add a trusted publisher with:
 
