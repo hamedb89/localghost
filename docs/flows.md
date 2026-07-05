@@ -37,6 +37,17 @@ yarn localghost doctor
 
 Localghost checks for Caddy and prints the exact install command when it is missing. It does not run Homebrew automatically.
 
+## Update Awareness
+
+As a developer, I want to know when Localghost itself is stale without paying for a network check on every run.
+
+```sh
+yarn localghost update
+LOCALGHOST_NO_UPDATE_CHECK=1 yarn localghost doctor
+```
+
+Localghost checks npm after successful commands, caches the result for 24 hours, and ignores check failures. `LOCALGHOST_NO_UPDATE_CHECK=1` and `--no-update-check` disable the automatic check.
+
 ## One-Time Setup
 
 As a developer, I want one explicit setup command that updates only the managed Localghost block in `/etc/hosts` and validates Caddy.
@@ -124,6 +135,7 @@ As a Codex or agent user, I want commands that are inspectable and scriptable wi
 ```sh
 yarn localghost print
 yarn localghost doctor
+yarn localghost update
 ```
 
 The CLI reference lives in [localghost(1)](./localghost.1.md). Future flows can add MCP helpers and repo templates, but the base package should remain a small, predictable CLI.

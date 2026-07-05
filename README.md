@@ -22,6 +22,7 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 - Checks whether Caddy is installed, but does not run Homebrew for you.
 - Provides a Vite plugin that sets explicit `server.allowedHosts` entries.
 - Prints parsed config and project-local state as JSON for scripts, Codex, agents, and future MCP tools.
+- Checks npm for newer Localghost releases at most once per day, with an explicit opt-out.
 
 ## Trust
 
@@ -30,6 +31,7 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 - npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
 - Runtime dependencies are intentionally small: `commander` for the CLI and `execa` for process execution. Vite is an optional peer dependency for the Vite plugin.
 - No postinstall scripts, hidden Homebrew installs, or broad hosts-file rewrites.
+- Update checks are best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
 
 <p align="center">
   <img src="./assets/localghost-app-icon.png" alt="Localghost app icon" width="180">
@@ -123,7 +125,8 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:routes": "localghost routes",
     "localghost:status": "localghost status",
     "localghost:teardown": "localghost teardown",
-    "localghost:doctor": "localghost doctor"
+    "localghost:doctor": "localghost doctor",
+    "localghost:update": "localghost update"
   }
 }
 ```
@@ -185,9 +188,13 @@ localghost setup --config .localghost.preview
 localghost status
 localghost teardown
 localghost teardown --remove-caddyfile
+localghost update
+localghost --no-update-check doctor
 localghost dev --config-pattern '^\.localghost\.'
 localghost print
 ```
+
+Localghost checks npm for newer releases after successful commands. The check has a short timeout, is cached for 24 hours, and never fails the command. Disable it with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`. Run `localghost update` when you want an explicit update check.
 
 `setup` writes only a managed block in the system hosts file:
 

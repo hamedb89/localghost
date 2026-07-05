@@ -86,7 +86,8 @@ function updatePackageScripts(packageJsonPath: string, configFile: string): bool
     "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
     "localghost:status": scripts["localghost:status"] ?? "localghost status",
     "localghost:teardown": scripts["localghost:teardown"] ?? "localghost teardown",
-    "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor"
+    "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor",
+    "localghost:update": scripts["localghost:update"] ?? "localghost update"
   };
 
   const changed = JSON.stringify(scripts) !== JSON.stringify(nextScripts);

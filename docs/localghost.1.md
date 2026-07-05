@@ -12,6 +12,7 @@ localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--json]
+localghost update [--json]
 localghost dev [--config file] [--config-pattern regex]
 localghost print [--config file] [--config-pattern regex]
 ```
@@ -19,6 +20,8 @@ localghost print [--config file] [--config-pattern regex]
 ## Description
 
 Localghost reads `.localghost`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local HTTPS proxy. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, and no broad Vite `allowedHosts: true` shortcut.
+
+Localghost checks npm for newer releases after successful commands. The check is best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
 
 ## Commands
 
@@ -73,6 +76,14 @@ Prints Localghost's project-local state file. Pass `--json` for scripts and agen
 
 ```sh
 localghost status --json
+```
+
+### update
+
+Checks npm for a newer Localghost release. Pass `--json` for scripts and agents.
+
+```sh
+localghost update
 ```
 
 ### routes
