@@ -152,7 +152,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
   const resolvedPath = resolveDevHostsPath(readOptions);
   const configEntries = readDevHosts(readOptions);
   const requestedPort = merged.port ?? envPort() ?? configEntries[0]?.port ?? 5173;
-  const dynamicPort = merged.dynamicPort ?? envDynamicPort() ?? false;
+  const dynamicPort = merged.dynamicPort ?? envDynamicPort() ?? true;
   const bindHost = merged.bindHost ?? "127.0.0.1";
   const probeHost = typeof bindHost === "string" ? bindHost : "127.0.0.1";
   const port = dynamicPort ? await findAvailablePort(requestedPort, { host: probeHost }) : requestedPort;

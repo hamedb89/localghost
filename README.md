@@ -173,7 +173,6 @@ A full app might compose them with its own servers:
 {
   "scripts": {
     "dev": "localghost run -- yarn dev:raw",
-    "dev:dynamic": "localghost run --dynamic-port -- vite",
     "dev:raw": "vite"
   }
 }
@@ -184,7 +183,7 @@ In Turborepo, let Localghost wrap the dev runner and keep dev uncached:
 ```json
 {
   "scripts": {
-    "dev": "localghost run --dynamic-port -- yarn dev:raw",
+    "dev": "localghost run -- yarn dev:raw",
     "dev:raw": "turbo dev"
   }
 }
@@ -200,18 +199,15 @@ Then keep persistent dev tasks uncached:
 }
 ```
 
-`localghost run` resolves one shared Localghost context, starts Caddy, handles the optional HTTPS trust prompt, then starts the child command. That keeps Localghost setup/proxy output before Vite's ready log. It passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
+`localghost run` resolves one shared Localghost context, starts Caddy, handles the optional HTTPS trust prompt, then starts the child command. That keeps Localghost setup/proxy output before Vite's ready log. It passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. Dynamic ports are on by default: Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port. Use `--dynamic-port=no` when you want strict fixed-port behavior.
 
-When settings need to be shared by the CLI wrapper and the Vite plugin, put them in `localghost.config.mjs`:
+Most repos do not need `localghost.config.mjs`. Localghost derives `project` from `package.json`, defaults to port `5173`, keeps HTTPS off by default, enables dynamic ports by default, and adds `www.` aliases by default. Add `localghost.config.mjs` only when you want to override those defaults:
 
 ```js
 import { defineLocalghostConfig } from "@hamedb89/localghost";
 
 export default defineLocalghostConfig({
-  project: "app",
-  port: 5173,
-  https: true,
-  dynamicPort: true
+  https: true
 });
 ```
 
@@ -244,7 +240,7 @@ Pass `--json` when another helper, such as a menu bar app, needs to poll the sam
 
 ## macOS Widget
 
-Localghost includes a tiny native macOS menu-bar widget in `apps/macos-widget`. It shows `LG n` in the top bar, where `n` is the number of active Localghost-managed apps, and its menu lists each project, route, target port, and listening state.
+Localghost includes a tiny native macOS widget in `apps/macos-widget`. It shows `LG n` in the top bar and opens a small floating desktop panel with the Localghost route list, target ports, and listening state.
 
 Build it from source:
 
@@ -271,7 +267,7 @@ export default defineConfig({
 });
 ```
 
-The plugin binds Vite to `127.0.0.1` by default, prints the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops. When `dynamicPort` is enabled in plugin options or `localghost.config.mjs`, the plugin uses the configured port when available and otherwise moves to the next free port before Vite starts.
+The plugin binds Vite to `127.0.0.1` by default, prints the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops. Dynamic ports are enabled by default, so the plugin uses the configured port when available and otherwise moves to the next free port before Vite starts. Set `dynamicPort: false` when strict fixed-port behavior matters.
 
 If `.localghost` is missing and Vite is running in an interactive terminal, the plugin asks whether to create one, prompts for the primary domain and optional extra domains, and then asks whether to run setup. Before touching `/etc/hosts`, it explains why macOS may ask for your password and confirms that only Localghost's managed block is changed.
 
@@ -310,7 +306,7 @@ localghost update
 localghost --no-update-check doctor
 localghost run -- vite
 localghost run --trust -- vite
-localghost run --dynamic-port -- turbo dev
+localghost run --dynamic-port=no -- vite
 localghost dev --config-pattern '^\.localghost\.'
 localghost dev --https
 localghost print

@@ -794,7 +794,7 @@ program
   .option("--ssl", "Alias for --https")
   .option("--setup", "Run setup before starting when setup is missing or stale")
   .option("--trust", "Trust Caddy's local HTTPS CA before starting the child command")
-  .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike, false)
+  .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike)
   .argument("<command...>", "Command to run after --, for example: localghost run -- vite")
   .action(async (
     command: string[],

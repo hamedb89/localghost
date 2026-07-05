@@ -1,8 +1,10 @@
 # Localghost macOS Widget
 
-The Localghost widget is a tiny native macOS menu-bar helper. It does not start or stop apps. It only shows what Localghost already knows is running from `localghost ps --json`.
+The Localghost widget is a tiny native macOS helper. It does not start or stop apps. It only shows what Localghost already knows is running from `localghost ps --json`.
 
 The menu-bar title is `LG n`, where `n` is the number of active Localghost-managed sessions. The menu lists each project, wrapper PID, working directory, route, target port, and whether the upstream port is listening.
+
+The app also opens a small floating desktop widget using the visual direction from `Resources/localghost-widget-ui-reference.png`: dark rounded panel, Localghost title, online count, route rows, ports, and an open-first-host footer. The black/white logo source at `Resources/localghost-logo-source.png` is bundled and processed at runtime into the app image, template menu-bar icon, and white panel logo.
 
 ## Build
 
@@ -17,6 +19,13 @@ The app is written to:
 
 ```txt
 dist/LocalghostWidget.app
+```
+
+The bundle includes:
+
+```txt
+Contents/Resources/localghost-logo-source.png
+Contents/Resources/localghost-widget-ui-reference.png
 ```
 
 ## Run

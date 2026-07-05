@@ -23,7 +23,7 @@ localghost print [--config file] [--config-pattern regex]
 
 ## Description
 
-Localghost reads `.localghost`, optionally reads `localghost.config.mjs`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local proxy. HTTP is the default; local HTTPS is explicit with `--https`, `--ssl`, or `https: true` in `localghost.config.mjs`. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, no surprise browser tabs, and no broad Vite `allowedHosts: true` shortcut.
+Localghost reads `.localghost`, optionally reads `localghost.config.mjs`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local proxy. The project name is derived from `package.json`, port `5173` is the fallback, HTTP is the default, dynamic ports are on by default, and local HTTPS is explicit with `--https`, `--ssl`, or `https: true` in `localghost.config.mjs`. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, no surprise browser tabs, and no broad Vite `allowedHosts: true` shortcut.
 
 Localghost checks npm for newer releases after successful commands. The check is best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
 
@@ -143,12 +143,12 @@ Resolves one Localghost context, ensures setup is ready, writes the runtime Cadd
 ```sh
 localghost run -- vite
 localghost run --trust -- vite
-localghost run --dynamic-port -- turbo dev
+localghost run --dynamic-port=no -- vite
 ```
 
-Pass `--dynamic-port` or `--dynamic-port=yes` to start at the configured port and walk upward until `127.0.0.1:<port>` is free. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
+By default, Localghost starts at the configured port and walks upward until `127.0.0.1:<port>` is free. Pass `--dynamic-port=no` when you want strict fixed-port behavior. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
 
-When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as the shared context. This keeps `https`, `dynamicPort`, `project`, and `wwwAlias` decisions consistent.
+When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as an override layer. Most repos can skip it; add it only for decisions like `https: true`, `dynamicPort: false`, `wwwAlias: false`, custom ports, or explicit project names.
 
 `dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 

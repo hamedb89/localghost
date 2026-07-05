@@ -5,13 +5,18 @@ ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 APP_DIR="$ROOT_DIR/dist/LocalghostWidget.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SOURCE_FILE="$ROOT_DIR/apps/macos-widget/LocalghostWidget.swift"
+SOURCE_RESOURCES_DIR="$ROOT_DIR/apps/macos-widget/Resources"
 EXECUTABLE="$MACOS_DIR/LocalghostWidget"
 MODULE_CACHE_DIR="${TMPDIR:-/tmp}/localghost-swift-module-cache"
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 mkdir -p "$MODULE_CACHE_DIR"
+
+cp "$SOURCE_RESOURCES_DIR/localghost-logo-source.png" "$RESOURCES_DIR/localghost-logo-source.png"
+cp "$SOURCE_RESOURCES_DIR/localghost-widget-ui-reference.png" "$RESOURCES_DIR/localghost-widget-ui-reference.png"
 
 swiftc \
   -parse-as-library \
