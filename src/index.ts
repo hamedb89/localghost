@@ -21,6 +21,22 @@ export { detectPackageManager, initLocalghost, packageAddCommand, packageRunComm
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { formatDomainRoutes, getDomainRoutes } from "./routes.js";
 export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, readLocalghostState, writeLocalghostState } from "./state.js";
+export {
+  checkForUpdate,
+  compareVersions,
+  formatUpdateMessage,
+  getUpdateCheckCachePath,
+  isNewerVersion,
+  isUpdateCheckDisabled,
+  LOCALGHOST_PACKAGE_NAME,
+  LOCALGHOST_VERSION,
+  markUpdateNotified,
+  maybeNotifyAboutUpdate,
+  shouldNotifyAboutUpdate,
+  UPDATE_CHECK_CACHE_TTL_MS,
+  UPDATE_CHECK_NOTIFY_TTL_MS,
+  UPDATE_CHECK_TIMEOUT_MS
+} from "./update-check.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
 export type { DoctorResult } from "./doctor.js";
 export type { InitOptions, InitResult, PackageManager } from "./init.js";
@@ -28,3 +44,4 @@ export type { RemoveSystemHostsResult, UpdateSystemHostsResult } from "./hosts-f
 export type { DevHostEntry } from "./parse.js";
 export type { DomainRoute, DomainRouteOptions } from "./routes.js";
 export type { LocalghostState, LocalghostStateAction, WriteLocalghostStateInput } from "./state.js";
+export type { UpdateCheckCache, UpdateCheckResult } from "./update-check.js";

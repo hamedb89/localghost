@@ -10,6 +10,7 @@ import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
 import { formatDomainRoutes } from "./routes.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
+import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   const localHosts = findLocalMdnsHosts(entries);
@@ -73,7 +74,15 @@ const program = new Command();
 program
   .name("localghost")
   .description("Buh. Friendly local hostnames for app repos.")
-  .version("0.1.0");
+  .version(LOCALGHOST_VERSION)
+  .option("--no-update-check", "Skip the npm update check for this run");
+
+program.hook("postAction", async (_thisCommand, actionCommand) => {
+  if (actionCommand.name() === "update") return;
+
+  const options = program.opts<{ updateCheck?: boolean }>();
+  await maybeNotifyAboutUpdate({ disabled: options.updateCheck === false });
+});
 
 program
   .command("init")
@@ -139,6 +148,33 @@ program
     if (!result.ok) {
       process.exitCode = 1;
     }
+  });
+
+program
+  .command("update")
+  .description("Check npm for a newer localghost release")
+  .option("--json", "Print raw JSON")
+  .action(async (options: { json?: boolean }) => {
+    const result = await checkForUpdate({ force: true, timeoutMs: 5000 });
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    const message = formatUpdateMessage(result);
+    if (message) {
+      console.log(message);
+      return;
+    }
+
+    if (result.source === "error") {
+      console.log(`Could not check npm for updates: ${result.error ?? "unknown error"}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(`localghost is up to date. Current: ${result.currentVersion}`);
   });
 
 program
