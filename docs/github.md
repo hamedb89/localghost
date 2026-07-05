@@ -139,6 +139,8 @@ Allowed actions: npm publish
 
 The workflow must keep `id-token: write`, run on a GitHub-hosted runner, and use a recent npm CLI. Trusted publishing does not need an `NPM_TOKEN` secret. npm automatically generates provenance for public packages published from public GitHub repositories through trusted publishing.
 
+If the workflow reaches `npm publish` and npm returns `404 Not Found` or a permission-flavored 404 for `@hamedb89/localghost`, recheck the trusted publisher fields above. The package, repository, workflow filename, environment name, and allowed action must match exactly.
+
 Local manual publishes are guarded by the `prepublishOnly` package hook, which runs the same release check.
 
 ## Patch Release Workflow
