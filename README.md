@@ -2,20 +2,21 @@
   <img src="./assets/localghost-banner.png" alt="Localghost - Friendly local hostnames" width="960">
 </p>
 
-# @localghost/dev
+# @hamedb89/localghost
 
-Friendly local hostnames for app repos.
+Buh. Friendly local hostnames for app repos.
 
-Localghost gives a project one small contract for local domains, Caddy, Vite, and the system hosts file. It is meant for teams that want to open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
+Localghost gives each project one small contract for local domains, Caddy, Vite, and the system hosts file. It is for developers who want to open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
 
 ## What It Does
 
-- Reads a `.dev-hosts` file from your app repo.
-- Updates a managed block in `/etc/hosts` during one-time setup.
+- Creates and reads `.localghost` in your app repo.
+- Keeps `.dev-hosts` working as a legacy fallback.
+- Updates only a managed Localghost block in `/etc/hosts` during explicit setup.
 - Generates `ops/local/Caddyfile` for local HTTPS reverse proxying.
-- Validates the Caddyfile before running Caddy.
+- Checks whether Caddy is installed, but does not run Homebrew for you.
 - Provides a Vite plugin that sets explicit `server.allowedHosts` entries.
-- Prints the friendly local URLs when Vite starts.
+- Prints parsed config as JSON for scripts, Codex, agents, and future MCP tools.
 
 <p align="center">
   <img src="./assets/localghost-app-icon.png" alt="Localghost app icon" width="180">
@@ -24,72 +25,99 @@ Localghost gives a project one small contract for local domains, Caddy, Vite, an
 ## Install
 
 ```sh
-npm install -D @localghost/dev
+yarn add -D @hamedb89/localghost
 ```
 
-With Yarn:
+With npm:
 
 ```sh
-yarn add -D @localghost/dev
+npm install -D @hamedb89/localghost
 ```
 
 With pnpm:
 
 ```sh
-pnpm add -D @localghost/dev
+pnpm add -D @hamedb89/localghost
 ```
 
-You also need Caddy installed on the machine:
+## Quick Start
+
+Create the project config and optional package scripts:
 
 ```sh
-brew install caddy
+yarn localghost init --write-scripts
 ```
 
-## Repo Contract
-
-Create `.dev-hosts` in your app repo:
+This creates `.localghost`:
 
 ```txt
+# Buh. Friendly names for local services.
+# Format: <host> <port>
 app.localhost 5173
 www.app.localhost 5173
 api.app.localhost 8787
+```
+
+Check the machine:
+
+```sh
+yarn localghost doctor
+```
+
+If Caddy is missing, Localghost prints:
+
+```txt
+Caddy: missing
+Run: brew install caddy
+Localghost will not install it for you. No surprise spells.
+```
+
+First time on a machine:
+
+```sh
+yarn localghost:setup
+```
+
+Daily proxy:
+
+```sh
+yarn localghost:proxy
 ```
 
 Prefer `.localhost` names. `.local` is supported, but Localghost warns because `.local` can collide with mDNS/Bonjour.
 
 ## Package Scripts
 
-Add scripts like these:
+`localghost init --write-scripts` adds these scripts when they are missing:
 
 ```json
 {
   "scripts": {
-    "local:setup": "localghost setup --project app",
-    "local:proxy": "localghost dev",
-    "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
-    "dev:api": "wrangler dev --port 8787",
-    "dev:local": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run local:proxy\""
+    "localghost:setup": "localghost setup",
+    "localghost:proxy": "localghost dev",
+    "localghost:print": "localghost print",
+    "localghost:doctor": "localghost doctor"
   }
 }
 ```
 
-First time on a machine:
+A full app might compose them with its own servers:
 
-```sh
-npm run local:setup
-```
-
-Daily:
-
-```sh
-npm run dev:local
+```json
+{
+  "scripts": {
+    "dev:web": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:api": "wrangler dev --port 8787",
+    "dev:local": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run localghost:proxy\""
+  }
+}
 ```
 
 ## Vite
 
 ```ts
 import { defineConfig } from "vite";
-import { localGhostPlugin } from "@localghost/dev/vite";
+import { localGhostPlugin } from "@hamedb89/localghost/vite";
 
 export default defineConfig({
   plugins: [
@@ -101,7 +129,7 @@ export default defineConfig({
 });
 ```
 
-The plugin generates an explicit `server.allowedHosts` list from `.dev-hosts`; it does not set `allowedHosts: true`.
+The plugin generates an explicit `server.allowedHosts` list from `.localghost`; it does not set `allowedHosts: true`.
 
 When Vite starts, Localghost prints the browser-facing URLs:
 
@@ -120,6 +148,9 @@ Set `log: false` if you want to keep Vite's default terminal output only.
 ## CLI
 
 ```sh
+localghost init
+localghost init --write-scripts
+localghost doctor
 localghost setup
 localghost setup --project app
 localghost dev
@@ -140,37 +171,45 @@ Localghost does not rewrite the whole hosts file. It replaces only its own manag
 
 ```ts
 import {
+  initLocalghost,
   readDevHosts,
   renderCaddyfile,
   renderHostsBlock,
+  runDoctor,
   updateSystemHosts
-} from "@localghost/dev";
+} from "@hamedb89/localghost";
 ```
 
 Vite helper:
 
 ```ts
-import { localGhostPlugin } from "@localghost/dev/vite";
+import { localGhostPlugin } from "@hamedb89/localghost/vite";
 ```
 
 `localHostsPlugin` is also exported as a compatibility alias.
 
+## Brand And Flows
+
+Localghost copy can be mysterious, goofy, magical, funny, and a little absurd. The product behavior should stay boring in the best way: explicit commands, exact paths, clear errors, and no hidden installs.
+
+- [Brand guidelines](./docs/brand.md)
+- [Job-to-be-done flows](./docs/flows.md)
+- [CLI reference](./docs/localghost.1.md)
+
 ## Publishing
 
-The recommended setup is:
+The recommended first setup is:
 
-- GitHub repo: `hamedbahrami/localghost`
-- npm package: `@localghost/dev`
+- GitHub repo: `hamedb89/localghost`
+- npm package: `@hamedb89/localghost`
 - CLI binary: `localghost`
 
-The unscoped npm name `localghost` is already taken, so the scoped package is the clean publish path. To publish under `@localghost/dev`, create or own the `localghost` npm organization/scope, then run:
+The unscoped npm name `localghost` is already taken. A future `@localghost/*` npm scope can still make sense if Localghost becomes a multi-package project, but the personal scope is the clean path you can own now.
 
 ```sh
 npm run release:check
 npm publish --access public
 ```
-
-If the `@localghost` npm scope is not available to your account, publish the same package under a personal scope first, for example `@hamedbahrami/localghost`, while keeping the CLI command as `localghost`.
 
 ## Assets
 

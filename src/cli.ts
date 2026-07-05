@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { getProjectName, readDevHosts, sanitizeProjectName } from "./config.js";
 import { validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
+import { checkCaddy, runDoctor } from "./doctor.js";
 import { updateSystemHosts } from "./hosts-file.js";
+import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
@@ -16,12 +18,101 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   }
 }
 
+function parsePort(value: string) {
+  const port = Number.parseInt(value, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new InvalidArgumentError("Port must be a number between 1 and 65535.");
+  }
+
+  return port;
+}
+
+function parsePackageManager(value: string): PackageManager {
+  if (value === "npm" || value === "yarn" || value === "pnpm") return value;
+  throw new InvalidArgumentError("Package manager must be npm, yarn, or pnpm.");
+}
+
+async function assertCaddyReady() {
+  const caddy = await checkCaddy();
+  if (caddy.found) return;
+
+  throw new Error([
+    "Caddy was not found.",
+    `Install it with: ${caddy.installHint}`,
+    "Localghost will not install it for you. No surprise spells."
+  ].join("\n"));
+}
+
 const program = new Command();
 
 program
   .name("localghost")
-  .description("Friendly local hostnames for app repos")
+  .description("Buh. Friendly local hostnames for app repos.")
   .version("0.1.0");
+
+program
+  .command("init")
+  .description("Create a .localghost config for this project")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--host <host>", "Primary local hostname")
+  .option("--port <number>", "Primary app port", parsePort)
+  .option("--api-host <host>", "API local hostname")
+  .option("--api-port <number>", "API port", parsePort)
+  .option("--package-manager <npm|yarn|pnpm>", "Package manager for suggested commands", parsePackageManager)
+  .option("--write-scripts", "Add localghost scripts to package.json")
+  .option("--force", "Overwrite an existing .localghost file")
+  .action((options: {
+    cwd: string;
+    host?: string;
+    port?: number;
+    apiHost?: string;
+    apiPort?: number;
+    packageManager?: PackageManager;
+    writeScripts?: boolean;
+    force?: boolean;
+  }) => {
+    const result = initLocalghost(options);
+
+    if (result.configCreated) {
+      console.log(`Buh. Created ${result.configPath}`);
+    } else {
+      console.log(`${result.configPath} already exists. Use --force to rewrite it.`);
+    }
+
+    if (options.writeScripts) {
+      if (result.packageJsonChanged) {
+        console.log(`Updated ${result.packageJsonPath}`);
+      } else if (result.packageJsonPath) {
+        console.log(`${result.packageJsonPath} already has localghost scripts.`);
+      } else {
+        console.log("No package.json found; skipped script setup.");
+      }
+    }
+
+    console.log("Next:");
+    for (const step of result.nextSteps) {
+      console.log(`  ${step}`);
+    }
+  });
+
+program
+  .command("doctor")
+  .description("Check machine prerequisites")
+  .action(async () => {
+    const result = await runDoctor();
+
+    if (result.caddy.found) {
+      console.log(`Caddy: ${result.caddy.version ?? "found"}`);
+    } else {
+      console.log("Caddy: missing");
+      console.log(`Run: ${result.caddy.installHint}`);
+      console.log("Localghost will not install it for you. No surprise spells.");
+    }
+
+    if (!result.ok) {
+      process.exitCode = 1;
+    }
+  });
 
 program
   .command("setup")
@@ -29,6 +120,8 @@ program
   .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
   .action(async (options: { project?: string; cwd: string }) => {
+    await assertCaddyReady();
+
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
     const entries = readDevHosts({ cwd: options.cwd });
 
@@ -54,6 +147,8 @@ program
   .description("Generate Caddyfile and run Caddy")
   .option("--cwd <path>", "Project directory", process.cwd())
   .action(async (options: { cwd: string }) => {
+    await assertCaddyReady();
+
     const entries = readDevHosts({ cwd: options.cwd });
 
     warnAboutLocalMdns(entries);

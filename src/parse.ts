@@ -6,7 +6,7 @@ export type DevHostEntry = {
 
 const HOST_PATTERN = /^(?=.{1,253}$)(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*\.?$/i;
 
-export function parseDevHosts(input: string): DevHostEntry[] {
+export function parseDevHosts(input: string, fileName = ".localghost"): DevHostEntry[] {
   const entries: DevHostEntry[] = [];
 
   input.split(/\r?\n/).forEach((rawLine, index) => {
@@ -21,7 +21,7 @@ export function parseDevHosts(input: string): DevHostEntry[] {
     const portRaw = parts[1];
 
     if (!host || !portRaw || parts.length > 2) {
-      throw new Error(`Invalid .dev-hosts line ${index + 1}: "${rawLine}"`);
+      throw new Error(`Invalid ${fileName} line ${index + 1}: "${rawLine}"`);
     }
 
     if (!HOST_PATTERN.test(host)) {
