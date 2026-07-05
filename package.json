@@ -1,6 +1,6 @@
 {
   "name": "@hamedb89/localghost",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Friendly local HTTPS hostnames for app repos with .localghost, Caddy, /etc/hosts, and Vite.",
   "type": "module",
   "bin": {
