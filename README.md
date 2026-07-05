@@ -146,6 +146,7 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:proxy:https": "localghost dev --https",
     "localghost:run": "localghost run --",
     "localghost:ready": "localghost status --ready",
+    "localghost:ps": "localghost ps",
     "localghost:print": "localghost print",
     "localghost:routes": "localghost routes",
     "localghost:status": "localghost status",
@@ -194,6 +195,20 @@ Then keep persistent dev tasks uncached:
 
 `localghost run` resolves one shared Localghost context, starts Caddy, passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
 
+`localghost dev` and `localghost run` also register their active sessions in a user-local activity file. Use `localghost ps` to see the Localghost apps currently running on the machine:
+
+```txt
+localghost ps
+
+app  run: vite
+  cwd: /Users/you/Projects/app
+  pid: 12345, caddy: 12346, child: 12347
+  started: 2026-07-05T12:00:00.000Z
+  app.localhost -> 127.0.0.1:5173 (listening)
+```
+
+Pass `--json` when another helper, such as a menu bar app, needs to poll the same state.
+
 ## Vite
 
 ```ts
@@ -240,6 +255,8 @@ localghost setup --config .localghost.preview
 localghost setup --https
 localghost status
 localghost status --ready
+localghost ps
+localghost ps --json
 localghost reset
 localghost teardown
 localghost teardown --remove-caddyfile

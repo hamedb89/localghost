@@ -13,6 +13,7 @@ localghost setup [--project name] [--config file] [--config-pattern regex] [--ht
 localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
+localghost ps [--json]
 localghost update [--json]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--dynamic-port] -- command
@@ -91,6 +92,15 @@ Prints Localghost's project-local state file and setup readiness. Pass `--ready`
 localghost status --ready
 ```
 
+### ps
+
+Shows Localghost `dev` and `run` sessions that are currently running on the machine. Stale records are pruned automatically when their wrapper process is gone. Each route also reports whether its upstream `127.0.0.1:<port>` is listening. Pass `--json` for menu bar helpers or other polling tools.
+
+```sh
+localghost ps
+localghost ps --json
+```
+
 ### update
 
 Checks npm for a newer Localghost release. Pass `--json` for scripts and agents.
@@ -125,6 +135,8 @@ localghost run --dynamic-port -- turbo dev
 ```
 
 Pass `--dynamic-port` or `--dynamic-port=yes` to start at the configured port and walk upward until `127.0.0.1:<port>` is free. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
+
+`dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 
 ### print
 

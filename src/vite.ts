@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
+import { normalize, resolve } from "node:path";
 import type { ConfigEnv, HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
 import {
+  getConfigFileCandidates,
   getProjectName,
-  readDevHosts,
   resolveDevHostsPath,
   sanitizeProjectName,
   type ConfigPattern,
@@ -83,6 +84,19 @@ function readOptionsFromPlugin(options: LocalGhostPluginOptions): ReadDevHostsOp
     ...(options.configFiles ? { configFiles: options.configFiles } : {}),
     ...(options.configPattern ? { configPattern: options.configPattern } : {})
   };
+}
+
+function getConfigWatchFiles(options: LocalGhostPluginOptions) {
+  const readOptions = readOptionsFromPlugin(options);
+  const cwd = readOptions.cwd ?? process.cwd();
+  const resolvedPath = resolveDevHostsPath(readOptions);
+  const candidatePaths = getConfigFileCandidates(readOptions).map((fileName) => resolve(cwd, fileName));
+
+  return [...new Set([...candidatePaths, resolvedPath.path])];
+}
+
+function normalizeWatchPath(filePath: string) {
+  return normalize(resolve(filePath));
 }
 
 function renderConfig(hosts: string[], port: number) {
@@ -202,6 +216,7 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
 export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin {
   let resolvedEntries: DevHostEntry[] = [];
   let resolvedVitePort: number | undefined;
+  let restartTimer: NodeJS.Timeout | undefined;
 
   return {
     name: "localghost:vite",
@@ -263,13 +278,45 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
     },
 
     configureServer(server) {
-      if (options.log === false) {
-        return;
-      }
+      const watchFiles = getConfigWatchFiles(options);
+      const watchedConfigFiles = new Set(watchFiles.map(normalizeWatchPath));
 
-      server.printUrls = () => {
-        printLocalHosts(server, resolvedEntries, resolvedVitePort, Boolean(options.https));
+      server.watcher.add(watchFiles);
+
+      const restartOnLocalghostConfigChange = (filePath: string) => {
+        if (!watchedConfigFiles.has(normalizeWatchPath(filePath))) {
+          return;
+        }
+
+        if (restartTimer) {
+          clearTimeout(restartTimer);
+        }
+
+        restartTimer = setTimeout(() => {
+          if (options.log !== false) {
+            server.config.logger.info("localghost config changed; restarting Vite dev server", {
+              clear: false,
+              timestamp: false
+            });
+          }
+
+          void server.restart().catch((error: unknown) => {
+            server.config.logger.error(error instanceof Error ? error.message : String(error), {
+              timestamp: false
+            });
+          });
+        }, 50);
       };
+
+      server.watcher.on("add", restartOnLocalghostConfigChange);
+      server.watcher.on("change", restartOnLocalghostConfigChange);
+      server.watcher.on("unlink", restartOnLocalghostConfigChange);
+
+      if (options.log !== false) {
+        server.printUrls = () => {
+          printLocalHosts(server, resolvedEntries, resolvedVitePort, Boolean(options.https));
+        };
+      }
     }
   };
 }

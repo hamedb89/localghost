@@ -1,4 +1,15 @@
 export {
+  getLocalghostActivityPath,
+  isProcessRunning,
+  listLocalghostRuns,
+  LOCALGHOST_ACTIVITY_VERSION,
+  pruneLocalghostActivity,
+  readLocalghostActivity,
+  registerLocalghostRun,
+  unregisterLocalghostRun,
+  writeLocalghostActivity
+} from "./activity.js";
+export {
   getConfigFileCandidates,
   getDevHostsPath,
   getProjectName,
@@ -40,6 +51,7 @@ export {
   UPDATE_CHECK_NOTIFY_TTL_MS,
   UPDATE_CHECK_TIMEOUT_MS
 } from "./update-check.js";
+export type { LocalghostActivity, LocalghostRunMode, LocalghostRunRecord, RegisterLocalghostRunInput } from "./activity.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
 export type { CaddyModeOptions } from "./caddy.js";
 export type { LocalghostContext, LocalghostContextOptions } from "./context.js";

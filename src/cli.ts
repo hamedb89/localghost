@@ -2,14 +2,22 @@
 
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
+import {
+  getLocalghostActivityPath,
+  listLocalghostRuns,
+  registerLocalghostRun,
+  unregisterLocalghostRun,
+  type LocalghostRunRecord
+} from "./activity.js";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
-import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, runCaddy, startCaddy } from "./caddy.js";
+import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy } from "./caddy.js";
 import { resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
+import { isPortAvailable } from "./port.js";
 import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes } from "./routes.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
@@ -180,6 +188,75 @@ async function runSetupFromReadiness(
     caddyHttps: https,
     entries: readiness.entries
   });
+}
+
+type LocalghostRunView = LocalghostRunRecord & {
+  routes: Array<{
+    host: string;
+    port: number;
+    target: string;
+    listening: boolean;
+  }>;
+};
+
+function maybePid(pid: number | undefined) {
+  return typeof pid === "number" && Number.isInteger(pid) && pid > 0 ? pid : undefined;
+}
+
+function registerCleanup(id: string) {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    unregisterLocalghostRun(id);
+  };
+
+  process.once("exit", cleanup);
+
+  return () => {
+    cleanup();
+    process.off("exit", cleanup);
+  };
+}
+
+async function getRunView(run: LocalghostRunRecord): Promise<LocalghostRunView> {
+  const portStatus = new Map<number, boolean>();
+
+  for (const entry of run.entries) {
+    if (!portStatus.has(entry.port)) {
+      portStatus.set(entry.port, !(await isPortAvailable(entry.port)));
+    }
+  }
+
+  return {
+    ...run,
+    routes: run.entries.map((entry) => ({
+      host: entry.host,
+      port: entry.port,
+      target: `127.0.0.1:${entry.port}`,
+      listening: portStatus.get(entry.port) ?? false
+    }))
+  };
+}
+
+function formatRunViews(runs: LocalghostRunView[]) {
+  if (runs.length === 0) return "No Localghost apps are running.";
+
+  const lines = ["localghost ps"];
+  for (const run of runs) {
+    const command = run.childCommand?.length ? ` ${run.childCommand.join(" ")}` : "";
+    const mode = command ? `${run.mode}:${command}` : run.mode;
+    lines.push("");
+    lines.push(`${run.projectName}  ${mode}`);
+    lines.push(`  cwd: ${run.cwd}`);
+    lines.push(`  pid: ${run.pid}${run.caddyPid ? `, caddy: ${run.caddyPid}` : ""}${run.childPid ? `, child: ${run.childPid}` : ""}`);
+    lines.push(`  started: ${run.startedAt}`);
+    for (const route of run.routes) {
+      lines.push(`  ${route.host} -> ${route.target} (${route.listening ? "listening" : "not listening"})`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 const program = new Command();
@@ -542,7 +619,25 @@ program
 
     const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
-    await runCaddy(caddyfile);
+    const caddy = startCaddy(caddyfile);
+    const caddyPid = maybePid(caddy.pid);
+    const runRecord = registerLocalghostRun({
+      mode: "dev",
+      cwd: options.cwd,
+      projectName: readiness.projectName,
+      configPath: readiness.configPath,
+      caddyfilePath: caddyfile,
+      ...(caddyPid ? { caddyPid } : {}),
+      https,
+      entries: readiness.entries
+    });
+    const cleanupRun = registerCleanup(runRecord.id);
+
+    try {
+      await caddy;
+    } finally {
+      cleanupRun();
+    }
   });
 
 program
@@ -621,6 +716,24 @@ program
         VITE_PORT: String(context.port)
       }
     });
+    const caddyPid = maybePid(caddy.pid);
+    const childPid = maybePid(child.pid);
+    const runRecord = registerLocalghostRun({
+      mode: "run",
+      cwd: context.cwd,
+      projectName: context.projectName,
+      configPath: context.configPath,
+      caddyfilePath: caddyfile,
+      ...(caddyPid ? { caddyPid } : {}),
+      ...(childPid ? { childPid } : {}),
+      childCommand: command,
+      https,
+      requestedPort: context.requestedPort,
+      port: context.port,
+      dynamicPort: context.dynamicPort,
+      entries: context.entries
+    });
+    const cleanupRun = registerCleanup(runRecord.id);
 
     const stopCaddy = () => {
       if (!caddy.killed) caddy.kill("SIGINT");
@@ -635,7 +748,23 @@ program
       stopChild();
       stopCaddy();
       await Promise.allSettled([child, caddyExit]);
+      cleanupRun();
     }
+  });
+
+program
+  .command("ps")
+  .description("Show Localghost dev sessions that are currently running")
+  .option("--json", "Print raw JSON")
+  .action(async (options: { json?: boolean }) => {
+    const runs = await Promise.all(listLocalghostRuns().map((run) => getRunView(run)));
+
+    if (options.json) {
+      console.log(JSON.stringify({ activityPath: getLocalghostActivityPath(), runs }, null, 2));
+      return;
+    }
+
+    console.log(formatRunViews(runs));
   });
 
 program

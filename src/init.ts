@@ -85,6 +85,7 @@ function updatePackageScripts(packageJsonPath: string, configFile: string): bool
     "localghost:proxy:https": scripts["localghost:proxy:https"] ?? `localghost dev${configFlag} --https`,
     "localghost:run": scripts["localghost:run"] ?? `localghost run${configFlag} --`,
     "localghost:ready": scripts["localghost:ready"] ?? `localghost status${configFlag} --ready`,
+    "localghost:ps": scripts["localghost:ps"] ?? "localghost ps",
     "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
     "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
     "localghost:status": scripts["localghost:status"] ?? "localghost status",
