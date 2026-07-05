@@ -10,7 +10,7 @@ import {
   type LocalghostRunRecord
 } from "./activity.js";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
-import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy } from "./caddy.js";
+import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy, trustCaddy } from "./caddy.js";
 import { resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
@@ -20,7 +20,7 @@ import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
 import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes } from "./routes.js";
-import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
+import { getLocalghostStatePath, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
 import { execa } from "execa";
 
@@ -76,6 +76,10 @@ type ProxyModeCliOptions = {
   ssl?: boolean;
 };
 
+type TrustCliOptions = {
+  trust?: boolean;
+};
+
 function contextOptionsFromCli(options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) {
   return {
     cwd: options.cwd,
@@ -105,9 +109,23 @@ async function assertCaddyReady() {
   ].join("\n"));
 }
 
+function existingTrustMarkers(cwd: string) {
+  const state = readLocalghostState(cwd);
+  return {
+    ...(state?.caddyTrustedAt ? { caddyTrustedAt: state.caddyTrustedAt } : {}),
+    ...(state?.caddyTrustPromptedAt ? { caddyTrustPromptedAt: state.caddyTrustPromptedAt } : {})
+  };
+}
+
 function explainHostsPassword() {
   console.log("Localghost may ask for your password to update its managed block in /etc/hosts.");
   console.log("It will only touch the lines between # localghost:start and # localghost:end.");
+}
+
+function explainTrustPassword() {
+  console.log("Localghost can trust Caddy's local HTTPS CA so browsers stop showing local certificate warnings.");
+  console.log("macOS may ask for your password to add that local CA to Keychain.");
+  console.log("This only affects Caddy's local development certificates on this machine.");
 }
 
 function useHttps(options: ProxyModeCliOptions) {
@@ -203,8 +221,58 @@ async function runSetupFromReadiness(
     ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
     caddyfilePath,
     caddyHttps: https,
+    ...existingTrustMarkers(cwd),
     entries: readiness.entries
   });
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runTrust(cwd: string, caddyfilePath: string) {
+  await wait(350);
+  try {
+    await trustCaddy(caddyfilePath);
+  } catch {
+    await wait(750);
+    await trustCaddy(caddyfilePath);
+  }
+
+  patchLocalghostState(cwd, { caddyTrustedAt: new Date().toISOString() });
+  console.log("Local HTTPS trust is ready.");
+}
+
+async function maybeTrustCaddy(
+  options: {
+    cwd: string;
+    https: boolean;
+    caddyfilePath: string;
+    trust?: boolean;
+  }
+) {
+  if (!options.https) return;
+
+  const state = readLocalghostState(options.cwd);
+  if (!options.trust && state?.caddyTrustedAt) return;
+
+  let shouldTrust = options.trust === true;
+
+  if (!shouldTrust) {
+    if (state?.caddyTrustPromptedAt || !canPrompt()) return;
+
+    explainTrustPassword();
+    shouldTrust = await confirm("Trust local HTTPS certificates now?", true);
+  }
+
+  if (!shouldTrust) {
+    patchLocalghostState(options.cwd, { caddyTrustPromptedAt: new Date().toISOString() });
+    console.log("Okay. Localghost will still run HTTPS, but the browser may show a certificate warning.");
+    console.log("Run localghost trust when you want to trust Caddy's local CA.");
+    return;
+  }
+
+  await runTrust(options.cwd, options.caddyfilePath);
 }
 
 type LocalghostRunView = LocalghostRunRecord & {
@@ -428,6 +496,7 @@ program
       ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
       caddyfilePath: caddyfile,
       caddyHttps: https,
+      ...existingTrustMarkers(options.cwd),
       entries
     });
 
@@ -435,6 +504,33 @@ program
     console.log(`Mode ${https ? "HTTPS" : "HTTP"}`);
     console.log(`State ${statePath}`);
     console.log("Setup complete.");
+  });
+
+program
+  .command("trust")
+  .description("Trust Caddy's local HTTPS CA for this project's HTTPS proxy")
+  .option("--project <name>", "Managed /etc/hosts block name")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--https", "Use HTTPS mode for the Caddyfile")
+  .option("--ssl", "Alias for --https")
+  .action(async (options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) => {
+    assertLocalDevelopment("trust");
+    await assertCaddyReady();
+
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    if (!context.https) {
+      throw new Error("Localghost HTTPS is not enabled for this context. Set https: true in localghost.config.mjs or pass --https.");
+    }
+
+    warnAboutLocalMdns(context.entries);
+    logDomainRoutes(context.entries, { https: true });
+    explainTrustPassword();
+
+    const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https: true });
+    await validateCaddyfile(caddyfile);
+    await runTrust(options.cwd, caddyfile);
   });
 
 program
@@ -557,6 +653,8 @@ program
       if (state.hostsPath) console.log(`Hosts: ${state.hostsPath}`);
       if (state.caddyfilePath) console.log(`Caddyfile: ${state.caddyfilePath}`);
       if (typeof state.caddyHttps === "boolean") console.log(`Mode: ${state.caddyHttps ? "HTTPS" : "HTTP"}`);
+      if (state.caddyTrustedAt) console.log(`HTTPS trust: yes (${state.caddyTrustedAt})`);
+      if (!state.caddyTrustedAt && state.caddyTrustPromptedAt) console.log(`HTTPS trust: not enabled (asked ${state.caddyTrustPromptedAt})`);
       if (typeof state.caddyfileRemoved === "boolean") console.log(`Caddyfile removed: ${state.caddyfileRemoved}`);
     }
 
@@ -601,7 +699,8 @@ program
   .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
   .option("--ssl", "Alias for --https")
   .option("--setup", "Run setup before starting the proxy when setup is missing or stale")
-  .action(async (options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions) => {
+  .option("--trust", "Trust Caddy's local HTTPS CA before starting the proxy")
+  .action(async (options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions & TrustCliOptions) => {
     assertLocalDevelopment("dev");
     await assertCaddyReady();
 
@@ -641,6 +740,7 @@ program
         ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
         caddyfilePath,
         caddyHttps: https,
+        ...existingTrustMarkers(options.cwd),
         entries: readiness.entries
       });
     }
@@ -651,6 +751,17 @@ program
     const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
     const caddy = startCaddy(caddyfile);
+    try {
+      await maybeTrustCaddy({
+        cwd: options.cwd,
+        https,
+        caddyfilePath: caddyfile,
+        ...(typeof options.trust === "boolean" ? { trust: options.trust } : {})
+      });
+    } catch (error) {
+      if (!caddy.killed) caddy.kill("SIGINT");
+      throw error;
+    }
     const caddyPid = maybePid(caddy.pid);
     const runRecord = registerLocalghostRun({
       mode: "dev",
@@ -682,11 +793,12 @@ program
   .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
   .option("--ssl", "Alias for --https")
   .option("--setup", "Run setup before starting when setup is missing or stale")
+  .option("--trust", "Trust Caddy's local HTTPS CA before starting the child command")
   .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike, false)
   .argument("<command...>", "Command to run after --, for example: localghost run -- vite")
   .action(async (
     command: string[],
-    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions
+    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions & TrustCliOptions
   ) => {
     assertLocalDevelopment("run");
     await assertCaddyReady();
@@ -739,6 +851,17 @@ program
     const caddyExit = caddy.catch((error: unknown) => {
       if (!caddy.killed) throw error;
     });
+    try {
+      await maybeTrustCaddy({
+        cwd: options.cwd,
+        https,
+        caddyfilePath: caddyfile,
+        ...(typeof options.trust === "boolean" ? { trust: options.trust } : {})
+      });
+    } catch (error) {
+      if (!caddy.killed) caddy.kill("SIGINT");
+      throw error;
+    }
     const [binary, ...args] = command;
     if (!binary) {
       throw new Error("Missing command. Use: localghost run -- vite");

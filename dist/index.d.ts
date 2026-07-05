@@ -57,6 +57,7 @@ declare function startCaddy(path: string): execa.ResultPromise<{
     cwd: string;
     stdio: "inherit";
 }>;
+declare function trustCaddy(path: string): Promise<void>;
 
 type LocalghostContextOptions = {
     cwd?: string;
@@ -184,15 +185,18 @@ type LocalghostState = {
     caddyfilePath?: string;
     caddyfileRemoved?: boolean;
     caddyHttps?: boolean;
+    caddyTrustedAt?: string;
+    caddyTrustPromptedAt?: string;
     entries?: DevHostEntry[];
 };
 type WriteLocalghostStateInput = Omit<LocalghostState, "version" | "updatedAt">;
 declare function getLocalghostStatePath(cwd?: string): string;
 declare function readLocalghostState(cwd?: string): LocalghostState | null;
 declare function writeLocalghostState(cwd: string, state: WriteLocalghostStateInput): string;
+declare function patchLocalghostState(cwd: string, patch: Partial<WriteLocalghostStateInput>): string | null;
 
 declare const LOCALGHOST_PACKAGE_NAME = "@hamedb89/localghost";
-declare const LOCALGHOST_VERSION = "0.1.6";
+declare const LOCALGHOST_VERSION = "0.1.7";
 declare const UPDATE_CHECK_CACHE_TTL_MS: number;
 declare const UPDATE_CHECK_NOTIFY_TTL_MS: number;
 declare const UPDATE_CHECK_TIMEOUT_MS = 900;
@@ -229,4 +233,4 @@ declare function maybeNotifyAboutUpdate(options?: {
     disabled?: boolean;
 }): Promise<void>;
 
-export { type CaddyModeOptions, ConfigPattern, DevHostEntry, type DoctorResult, type DomainRoute, type DomainRouteOptions, type FindAvailablePortOptions, type InitOptions, type InitResult, LOCALGHOST_ACTIVITY_VERSION, LOCALGHOST_PACKAGE_NAME, LOCALGHOST_STATE_FILE, LOCALGHOST_VERSION, type LocalghostActivity, type LocalghostContext, type LocalghostContextOptions, type LocalghostEnvironment, type LocalghostRunMode, type LocalghostRunRecord, type LocalghostState, type LocalghostStateAction, type PackageManager, ReadDevHostsOptions, type RegisterLocalghostRunInput, type RemoveSystemHostsResult, UPDATE_CHECK_CACHE_TTL_MS, UPDATE_CHECK_NOTIFY_TTL_MS, UPDATE_CHECK_TIMEOUT_MS, type UpdateCheckCache, type UpdateCheckResult, type UpdateSystemHostsResult, type WriteLocalghostStateInput, assertLocalDevelopment, checkCaddy, checkForUpdate, compareVersions, defineLocalghostConfig, detectPackageManager, findAvailablePort, formatDomainRoutes, formatUpdateMessage, getCaddyfilePath, getDomainRoutes, getLocalghostActivityPath, getLocalghostStatePath, getProductionEnvKeys, getProductionReason, getSystemHostsPath, getUpdateCheckCachePath, initLocalghost, isNewerVersion, isPortAvailable, isProcessRunning, isProductionLike, isUpdateCheckDisabled, listLocalghostRuns, markUpdateNotified, maybeNotifyAboutUpdate, packageAddCommand, packageRunCommand, pruneLocalghostActivity, readLocalghostActivity, readLocalghostState, registerLocalghostRun, removeManagedBlock, removeSystemHosts, renderCaddyfile, renderHostsBlock, resolveLocalghostContext, runCaddy, runDoctor, shouldNotifyAboutUpdate, startCaddy, unregisterLocalghostRun, updateSystemHosts, upsertManagedBlock, validateCaddyfile, writeCaddyfile, writeLocalghostActivity, writeLocalghostState };
+export { type CaddyModeOptions, ConfigPattern, DevHostEntry, type DoctorResult, type DomainRoute, type DomainRouteOptions, type FindAvailablePortOptions, type InitOptions, type InitResult, LOCALGHOST_ACTIVITY_VERSION, LOCALGHOST_PACKAGE_NAME, LOCALGHOST_STATE_FILE, LOCALGHOST_VERSION, type LocalghostActivity, type LocalghostContext, type LocalghostContextOptions, type LocalghostEnvironment, type LocalghostRunMode, type LocalghostRunRecord, type LocalghostState, type LocalghostStateAction, type PackageManager, ReadDevHostsOptions, type RegisterLocalghostRunInput, type RemoveSystemHostsResult, UPDATE_CHECK_CACHE_TTL_MS, UPDATE_CHECK_NOTIFY_TTL_MS, UPDATE_CHECK_TIMEOUT_MS, type UpdateCheckCache, type UpdateCheckResult, type UpdateSystemHostsResult, type WriteLocalghostStateInput, assertLocalDevelopment, checkCaddy, checkForUpdate, compareVersions, defineLocalghostConfig, detectPackageManager, findAvailablePort, formatDomainRoutes, formatUpdateMessage, getCaddyfilePath, getDomainRoutes, getLocalghostActivityPath, getLocalghostStatePath, getProductionEnvKeys, getProductionReason, getSystemHostsPath, getUpdateCheckCachePath, initLocalghost, isNewerVersion, isPortAvailable, isProcessRunning, isProductionLike, isUpdateCheckDisabled, listLocalghostRuns, markUpdateNotified, maybeNotifyAboutUpdate, packageAddCommand, packageRunCommand, patchLocalghostState, pruneLocalghostActivity, readLocalghostActivity, readLocalghostState, registerLocalghostRun, removeManagedBlock, removeSystemHosts, renderCaddyfile, renderHostsBlock, resolveLocalghostContext, runCaddy, runDoctor, shouldNotifyAboutUpdate, startCaddy, trustCaddy, unregisterLocalghostRun, updateSystemHosts, upsertManagedBlock, validateCaddyfile, writeCaddyfile, writeLocalghostActivity, writeLocalghostState };

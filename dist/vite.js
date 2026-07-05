@@ -407,7 +407,7 @@ function readLocalghostState(cwd = process.cwd()) {
 }
 function writeLocalghostState(cwd, state) {
   const path = getLocalghostStatePath(cwd);
-  writeTextFile(path, `${JSON.stringify({ version: 1, updatedAt: (/* @__PURE__ */ new Date()).toISOString(), ...state }, null, 2)}
+  writeTextFile(path, `${JSON.stringify({ ...state, version: 1, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)}
 `);
   return path;
 }

@@ -18,7 +18,7 @@ export {
   resolveDevHostsPath,
   sanitizeProjectName
 } from "./config.js";
-export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
+export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 export { defineLocalghostConfig, resolveLocalghostContext } from "./context.js";
 export { checkCaddy, runDoctor } from "./doctor.js";
 export { assertLocalDevelopment, getProductionEnvKeys, getProductionReason, isProductionLike } from "./env.js";
@@ -34,7 +34,7 @@ export { detectPackageManager, initLocalghost, packageAddCommand, packageRunComm
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
 export { formatDomainRoutes, getDomainRoutes } from "./routes.js";
-export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, readLocalghostState, writeLocalghostState } from "./state.js";
+export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 export {
   checkForUpdate,
   compareVersions,

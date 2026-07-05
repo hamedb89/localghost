@@ -20,6 +20,8 @@ export type LocalghostState = {
   caddyfilePath?: string;
   caddyfileRemoved?: boolean;
   caddyHttps?: boolean;
+  caddyTrustedAt?: string;
+  caddyTrustPromptedAt?: string;
   entries?: DevHostEntry[];
 };
 
@@ -37,6 +39,12 @@ export function readLocalghostState(cwd = process.cwd()): LocalghostState | null
 
 export function writeLocalghostState(cwd: string, state: WriteLocalghostStateInput) {
   const path = getLocalghostStatePath(cwd);
-  writeTextFile(path, `${JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), ...state }, null, 2)}\n`);
+  writeTextFile(path, `${JSON.stringify({ ...state, version: 1, updatedAt: new Date().toISOString() }, null, 2)}\n`);
   return path;
+}
+
+export function patchLocalghostState(cwd: string, patch: Partial<WriteLocalghostStateInput>) {
+  const current = readLocalghostState(cwd);
+  if (!current) return null;
+  return writeLocalghostState(cwd, { ...(current as unknown as WriteLocalghostStateInput), ...patch });
 }

@@ -77,3 +77,10 @@ export function startCaddy(path: string) {
     stdio: "inherit"
   });
 }
+
+export async function trustCaddy(path: string) {
+  await execa("caddy", ["trust", "--config", path], {
+    cwd: dirname(path),
+    stdio: "inherit"
+  });
+}

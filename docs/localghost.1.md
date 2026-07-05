@@ -10,13 +10,14 @@ localghost - friendly local hostnames for app repos
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
+localghost trust [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
 localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
 localghost update [--json]
-localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup]
-localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--dynamic-port] -- command
+localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust]
+localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust] [--dynamic-port] -- command
 localghost print [--config file] [--config-pattern regex]
 ```
 
@@ -27,6 +28,8 @@ Localghost reads `.localghost`, optionally reads `localghost.config.mjs`, writes
 Localghost checks npm for newer releases after successful commands. The check is best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
 
 `setup`, `dev`, and `teardown` refuse to run in production-like environments such as `NODE_ENV=production`, `VERCEL_ENV=production`, or `LOCALGHOST_ENV=production`.
+
+When HTTPS is enabled, `dev` and `run` can trust Caddy's local HTTPS CA before the child app starts. Localghost asks once in interactive terminals, records the answer in `ops/local/localghost-state.json`, and supports `--trust` or `localghost trust` when you want to rerun the trust step intentionally.
 
 ## Commands
 
@@ -65,6 +68,14 @@ Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfil
 
 ```sh
 localghost setup --project app
+```
+
+### trust
+
+Validates the HTTPS Caddyfile and runs `caddy trust --config <Caddyfile>` so browsers can trust Caddy's local development certificates. macOS may ask for your password to add Caddy's local CA to Keychain.
+
+```sh
+localghost trust
 ```
 
 ### teardown
@@ -119,7 +130,7 @@ localghost routes
 
 ### dev
 
-Requires setup to be ready, writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`. HTTP is the default. Pass `--https` or `--ssl` to run a local HTTPS proxy. Pass `--setup` to explicitly allow `dev` to run setup first when setup is missing or stale.
+Requires setup to be ready, writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`. HTTP is the default. Pass `--https` or `--ssl` to run a local HTTPS proxy. Pass `--setup` to explicitly allow `dev` to run setup first when setup is missing or stale. Pass `--trust` to force the Caddy trust step before the proxy stays running.
 
 ```sh
 localghost dev
@@ -127,10 +138,11 @@ localghost dev
 
 ### run
 
-Resolves one Localghost context, ensures setup is ready, writes the runtime Caddyfile, starts Caddy, and runs a child dev command. The selected port is passed to the child as `LOCALGHOST_PORT` and `VITE_PORT`.
+Resolves one Localghost context, ensures setup is ready, writes the runtime Caddyfile, starts Caddy, handles the optional HTTPS trust prompt, and then runs a child dev command. The selected port is passed to the child as `LOCALGHOST_PORT` and `VITE_PORT`.
 
 ```sh
 localghost run -- vite
+localghost run --trust -- vite
 localghost run --dynamic-port -- turbo dev
 ```
 

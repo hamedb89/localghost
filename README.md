@@ -9,7 +9,7 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.6-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/badge/npm-v0.1.7-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for friendly local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 
@@ -102,6 +102,12 @@ Use HTTPS only when you explicitly want Caddy local certificates:
 yarn localghost:proxy:https
 ```
 
+Trust Caddy's local HTTPS CA when you want browsers to stop showing local certificate warnings:
+
+```sh
+yarn localghost:trust
+```
+
 Reset generated setup without deleting `.localghost`:
 
 ```sh
@@ -146,6 +152,7 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:proxy:https": "localghost dev --https",
     "localghost:run": "localghost run --",
     "localghost:ready": "localghost status --ready",
+    "localghost:trust": "localghost trust",
     "localghost:ps": "localghost ps",
     "localghost:print": "localghost print",
     "localghost:routes": "localghost routes",
@@ -165,7 +172,7 @@ A full app might compose them with its own servers:
 ```json
 {
   "scripts": {
-    "dev": "localghost run -- vite",
+    "dev": "localghost run -- yarn dev:raw",
     "dev:dynamic": "localghost run --dynamic-port -- vite",
     "dev:raw": "vite"
   }
@@ -177,7 +184,7 @@ In Turborepo, let Localghost wrap the dev runner and keep dev uncached:
 ```json
 {
   "scripts": {
-    "dev": "localghost run --dynamic-port -- turbo dev",
+    "dev": "localghost run --dynamic-port -- yarn dev:raw",
     "dev:raw": "turbo dev"
   }
 }
@@ -193,7 +200,7 @@ Then keep persistent dev tasks uncached:
 }
 ```
 
-`localghost run` resolves one shared Localghost context, starts Caddy, passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
+`localghost run` resolves one shared Localghost context, starts Caddy, handles the optional HTTPS trust prompt, then starts the child command. That keeps Localghost setup/proxy output before Vite's ready log. It passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
 
 When settings need to be shared by the CLI wrapper and the Vite plugin, put them in `localghost.config.mjs`:
 
@@ -213,7 +220,8 @@ Then the daily script can stay small:
 ```json
 {
   "scripts": {
-    "dev": "localghost run -- vite"
+    "dev": "localghost run -- yarn dev:raw",
+    "dev:raw": "vite"
   }
 }
 ```
@@ -277,6 +285,7 @@ localghost setup
 localghost setup --project app
 localghost setup --config .localghost.preview
 localghost setup --https
+localghost trust
 localghost status
 localghost status --ready
 localghost ps
@@ -287,6 +296,7 @@ localghost teardown --remove-caddyfile
 localghost update
 localghost --no-update-check doctor
 localghost run -- vite
+localghost run --trust -- vite
 localghost run --dynamic-port -- turbo dev
 localghost dev --config-pattern '^\.localghost\.'
 localghost dev --https
@@ -296,6 +306,8 @@ localghost print
 Localghost checks npm for newer releases after successful commands. The check has a short timeout, is cached for 24 hours, and never fails the command. Disable it with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`. Run `localghost update` when you want an explicit update check.
 
 `setup`, `dev`, and `teardown` refuse to run in production-like environments such as `NODE_ENV=production`, `VERCEL_ENV=production`, or `LOCALGHOST_ENV=production`.
+
+When HTTPS is enabled, `localghost dev` and `localghost run` ask once whether to trust Caddy's local HTTPS CA. If you accept, macOS may ask for your password so Caddy can add its local CA to Keychain. Localghost records the result in `ops/local/localghost-state.json`; use `localghost trust` or `localghost run --trust -- ...` when you want to rerun the trust step intentionally.
 
 `setup` writes only a managed block in the system hosts file:
 

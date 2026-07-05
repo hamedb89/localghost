@@ -283,6 +283,12 @@ function startCaddy(path) {
     stdio: "inherit"
   });
 }
+async function trustCaddy(path) {
+  await execa("caddy", ["trust", "--config", path], {
+    cwd: dirname3(path),
+    stdio: "inherit"
+  });
+}
 
 // src/context.ts
 import { existsSync as existsSync3 } from "fs";
@@ -608,6 +614,7 @@ function updatePackageScripts(packageJsonPath, configFile) {
     "localghost:proxy:https": scripts["localghost:proxy:https"] ?? `localghost dev${configFlag} --https`,
     "localghost:run": scripts["localghost:run"] ?? `localghost run${configFlag} --`,
     "localghost:ready": scripts["localghost:ready"] ?? `localghost status${configFlag} --ready`,
+    "localghost:trust": scripts["localghost:trust"] ?? `localghost trust${configFlag}`,
     "localghost:ps": scripts["localghost:ps"] ?? "localghost ps",
     "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
     "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
@@ -704,9 +711,14 @@ function readLocalghostState(cwd = process.cwd()) {
 }
 function writeLocalghostState(cwd, state) {
   const path = getLocalghostStatePath(cwd);
-  writeTextFile(path, `${JSON.stringify({ version: 1, updatedAt: (/* @__PURE__ */ new Date()).toISOString(), ...state }, null, 2)}
+  writeTextFile(path, `${JSON.stringify({ ...state, version: 1, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)}
 `);
   return path;
+}
+function patchLocalghostState(cwd, patch) {
+  const current = readLocalghostState(cwd);
+  if (!current) return null;
+  return writeLocalghostState(cwd, { ...current, ...patch });
 }
 
 // src/update-check.ts
@@ -714,7 +726,7 @@ import { existsSync as existsSync6, mkdirSync as mkdirSync3, readFileSync as rea
 import { homedir as homedir2 } from "os";
 import { dirname as dirname4, join as join7 } from "path";
 var LOCALGHOST_PACKAGE_NAME = "@hamedb89/localghost";
-var LOCALGHOST_VERSION = "0.1.6";
+var LOCALGHOST_VERSION = "0.1.7";
 var UPDATE_CHECK_CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
 var UPDATE_CHECK_NOTIFY_TTL_MS = 24 * 60 * 60 * 1e3;
 var UPDATE_CHECK_TIMEOUT_MS = 900;
@@ -917,6 +929,7 @@ export {
   packageAddCommand,
   packageRunCommand,
   parseDevHosts,
+  patchLocalghostState,
   pruneLocalghostActivity,
   readDevHosts,
   readLocalghostActivity,
@@ -933,6 +946,7 @@ export {
   sanitizeProjectName,
   shouldNotifyAboutUpdate,
   startCaddy,
+  trustCaddy,
   unregisterLocalghostRun,
   updateSystemHosts,
   upsertManagedBlock,
