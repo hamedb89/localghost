@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Localghost - Friendly local HTTPS hostnames</title>
-    <meta name="description" content="Localghost is a tiny Node.js CLI for friendly local HTTPS hostnames with .localghost configs, Caddy, /etc/hosts, and Vite allowedHosts.">
+    <title>Localghost - Friendly local dev domains</title>
+    <meta name="description" content="Localghost is a tiny Node.js CLI for friendly local domains with one-command yarn dev setup, Caddy, /etc/hosts, and Vite allowedHosts.">
     <meta property="og:title" content="Localghost">
-    <meta property="og:description" content="Friendly local HTTPS hostnames for app repos.">
+    <meta property="og:description" content="Friendly local dev domains for app repos.">
     <meta property="og:image" content="assets/localghost-banner.png">
     <meta name="theme-color" content="#6d3ff2">
     <style>
@@ -235,9 +235,9 @@
 
       <div class="wrap hero-grid">
         <div>
-          <p class="eyebrow">Buh. Friendly local hostnames.</p>
+          <p class="eyebrow">Buh. Friendly local dev domains.</p>
           <h1>Localghost</h1>
-          <p class="lead">A tiny Node.js CLI for local HTTPS domains in app repos. Use one `.localghost` contract for Caddy, `/etc/hosts`, Vite `allowedHosts`, and clean browser-facing URLs.</p>
+          <p class="lead">A tiny Node.js CLI that turns `yarn dev` into the whole local-domain flow: create the config when needed, prepare Caddy and `/etc/hosts`, run the proxy, and start Vite behind a clean browser-facing URL.</p>
           <div class="actions">
             <a class="button primary" href="https://github.com/hamedb89/localghost">View on GitHub</a>
             <a class="button secondary" href="https://www.npmjs.com/package/@hamedb89/localghost">Install from npm</a>
@@ -249,10 +249,11 @@
             <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
             <pre>yarn add -D @hamedb89/localghost
 
-yarn localghost init --write-scripts
-yarn localghost doctor
-yarn localghost:setup
-yarn localghost:proxy</pre>
+// package.json
+"dev": "localghost run -- yarn dev:raw",
+"dev:raw": "vite"
+
+yarn dev</pre>
           </div>
         </div>
       </div>
@@ -264,16 +265,28 @@ yarn localghost:proxy</pre>
           <h2>One small contract for local dev</h2>
           <div class="grid">
             <article class="card">
-              <h3>.localghost</h3>
-              <p>Map friendly `.localhost` names to app ports in a plain text file that humans and agents can inspect.</p>
+              <h3>Yarn dev first</h3>
+              <p>If `.localghost` is missing, Localghost asks to create it, runs setup when confirmed, starts Caddy, then starts your raw dev server.</p>
             </article>
             <article class="card">
-              <h3>Caddy and hosts</h3>
-              <p>Generate local HTTPS proxy config and update only Localghost's managed block in `/etc/hosts`.</p>
+              <h3>Clean defaults</h3>
+              <p>Project names come from `package.json`, port `5173` is the fallback, HTTP is default, dynamic ports are on, and `www.` aliases are included.</p>
             </article>
             <article class="card">
               <h3>Vite-safe defaults</h3>
               <p>Set explicit `server.allowedHosts` entries without opening the broad `allowedHosts: true` shortcut.</p>
+            </article>
+            <article class="card">
+              <h3>HTTPS when you ask</h3>
+              <p>Keep local HTTP by default. Turn on Caddy HTTPS with `https: true` or `--https`, then trust the local CA only when you choose.</p>
+            </article>
+            <article class="card">
+              <h3>Override only when needed</h3>
+              <p>Most repos do not need `localghost.config.mjs`. Add it only for nonstandard ports, HTTPS, fixed ports, or custom alias behavior.</p>
+            </article>
+            <article class="card">
+              <h3>Plain local state</h3>
+              <p>Generated setup lives under `ops/local/`, and reset lets you retest the first-run flow without deleting your `.localghost` contract.</p>
             </article>
           </div>
         </div>
