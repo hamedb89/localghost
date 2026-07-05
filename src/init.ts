@@ -87,6 +87,7 @@ function updatePackageScripts(packageJsonPath: string, configFile: string): bool
     "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
     "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
     "localghost:status": scripts["localghost:status"] ?? "localghost status",
+    "localghost:reset": scripts["localghost:reset"] ?? "localghost reset",
     "localghost:teardown": scripts["localghost:teardown"] ?? "localghost teardown",
     "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor",
     "localghost:update": scripts["localghost:update"] ?? "localghost update",

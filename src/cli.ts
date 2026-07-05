@@ -75,6 +75,11 @@ async function assertCaddyReady() {
   ].join("\n"));
 }
 
+function explainHostsPassword() {
+  console.log("Localghost may ask for your password to update its managed block in /etc/hosts.");
+  console.log("It will only touch the lines between # localghost:start and # localghost:end.");
+}
+
 function useHttps(options: ProxyModeCliOptions) {
   return options.https === true || options.ssl === true;
 }
@@ -270,6 +275,7 @@ program
     warnAboutLocalMdns(entries);
     logDomainRoutes(entries, { https });
 
+    explainHostsPassword();
     const hostsResult = await updateSystemHosts(projectName, entries);
 
     if (hostsResult.changed) {
@@ -301,6 +307,44 @@ program
   });
 
 program
+  .command("reset")
+  .description("Remove Localghost setup state without deleting .localghost")
+  .option("--project <name>", "Managed /etc/hosts block name")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .action(async (options: { project?: string; cwd: string }) => {
+    assertLocalDevelopment("reset");
+
+    const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
+    const caddyfilePath = getCaddyfilePath(options.cwd);
+    const statePath = getLocalghostStatePath(options.cwd);
+
+    explainHostsPassword();
+    const hostsResult = await removeSystemHosts(projectName);
+
+    if (existsSync(caddyfilePath)) {
+      unlinkSync(caddyfilePath);
+      console.log(`Removed ${caddyfilePath}`);
+    } else {
+      console.log(`${caddyfilePath} was not present`);
+    }
+
+    if (existsSync(statePath)) {
+      unlinkSync(statePath);
+      console.log(`Removed ${statePath}`);
+    } else {
+      console.log(`${statePath} was not present`);
+    }
+
+    if (hostsResult.removed) {
+      console.log(`Removed Localghost hosts block from ${hostsResult.hostsPath}`);
+    } else {
+      console.log(`No Localghost hosts block found in ${hostsResult.hostsPath}`);
+    }
+
+    console.log(".localghost was left in place. Run localghost setup when you are ready.");
+  });
+
+program
   .command("teardown")
   .description("Remove Localghost's managed /etc/hosts block")
   .option("--project <name>", "Managed /etc/hosts block name")
@@ -309,6 +353,7 @@ program
   .action(async (options: { project?: string; cwd: string; removeCaddyfile?: boolean }) => {
     assertLocalDevelopment("teardown");
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
+    explainHostsPassword();
     const hostsResult = await removeSystemHosts(projectName);
     const caddyfilePath = getCaddyfilePath(options.cwd);
     let caddyfileRemoved = false;
@@ -437,6 +482,7 @@ program
         );
       }
 
+      explainHostsPassword();
       const hostsResult = await updateSystemHosts(readiness.projectName, readiness.entries);
       const caddyfilePath = await writeCaddyfile(readiness.entries, options.cwd, { https });
       await validateCaddyfile(caddyfilePath);

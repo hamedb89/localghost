@@ -102,6 +102,13 @@ Use HTTPS only when you explicitly want Caddy local certificates:
 yarn localghost:proxy:https
 ```
 
+Reset generated setup without deleting `.localghost`:
+
+```sh
+yarn localghost:reset
+yarn localghost:setup
+```
+
 Prefer `.localhost` names. `.local` is supported, but Localghost warns because `.local` can collide with mDNS/Bonjour.
 
 ## Config Files
@@ -141,6 +148,7 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:print": "localghost print",
     "localghost:routes": "localghost routes",
     "localghost:status": "localghost status",
+    "localghost:reset": "localghost reset",
     "localghost:teardown": "localghost teardown",
     "localghost:doctor": "localghost doctor",
     "localghost:update": "localghost update",
@@ -191,6 +199,8 @@ export default defineConfig({
 
 The plugin sets Vite's dev host to the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops.
 
+If `.localghost` is missing and Vite is running in an interactive terminal, the plugin asks whether to create one, prompts for the primary domain and optional extra domains, and then asks whether to run setup. Before touching `/etc/hosts`, it explains why macOS may ask for your password and confirms that only Localghost's managed block is changed.
+
 When Vite starts, Localghost prints the browser-facing URLs:
 
 ```txt
@@ -216,6 +226,7 @@ localghost setup --config .localghost.preview
 localghost setup --https
 localghost status
 localghost status --ready
+localghost reset
 localghost teardown
 localghost teardown --remove-caddyfile
 localghost update
@@ -255,6 +266,13 @@ When a project no longer needs Localghost, teardown removes only the managed hos
 
 ```sh
 localghost teardown
+```
+
+When you want to retest setup without deleting `.localghost`, use reset:
+
+```sh
+localghost reset
+localghost setup
 ```
 
 The generated Caddyfile is left in place by default. Remove it explicitly when you want a fuller cleanup:

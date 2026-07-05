@@ -10,6 +10,7 @@ localghost - friendly local hostnames for app repos
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
+localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost update [--json]
@@ -70,6 +71,15 @@ Removes the managed Localghost block from `/etc/hosts` for the selected project 
 
 ```sh
 localghost teardown --remove-caddyfile
+```
+
+### reset
+
+Removes the managed Localghost hosts block, generated Caddyfile, and setup state, but keeps `.localghost` in place so setup can be tested again.
+
+```sh
+localghost reset
+localghost setup
 ```
 
 ### status

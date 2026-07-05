@@ -115,6 +115,19 @@ export default {
 
 The plugin defaults to HTTP. Pass `https: true` only when Vite is expected to sit behind a Caddy HTTPS proxy. Localghost prints URLs but does not open browser tabs.
 
+If `.localghost` is missing, an interactive `yarn dev` asks whether to create it, asks for the primary `.localhost` domain, allows extra domains, explains the `/etc/hosts` password prompt, and runs setup when confirmed. Non-interactive runs fail with the exact setup command instead of guessing.
+
+## Reset For Testing
+
+As a developer, I want to retest setup without deleting my project config.
+
+```sh
+yarn localghost reset
+yarn localghost setup
+```
+
+`reset` removes only the managed hosts block, generated Caddyfile, and setup state. It leaves `.localghost` in place.
+
 ## Teardown
 
 As a developer, I want to cleanly remove Localghost from a project when the repo is archived or no longer needs friendly hostnames.
