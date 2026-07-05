@@ -12,8 +12,19 @@ export type UpdateSystemHostsResult = {
   tempPath?: string;
 };
 
+export type RemoveSystemHostsResult = UpdateSystemHostsResult & {
+  removed: boolean;
+};
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getManagedBlockPattern(projectName: string) {
+  const sanitizedProjectName = sanitizeProjectName(projectName);
+  const start = `# localghost:start ${sanitizedProjectName}`;
+  const end = `# localghost:end ${sanitizedProjectName}`;
+  return new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}\\n?`, "m");
 }
 
 export function getSystemHostsPath() {
@@ -33,16 +44,37 @@ export function renderHostsBlock(projectName: string, entries: DevHostEntry[]) {
 }
 
 export function upsertManagedBlock(existing: string, projectName: string, block: string) {
-  const sanitizedProjectName = sanitizeProjectName(projectName);
-  const start = `# localghost:start ${sanitizedProjectName}`;
-  const end = `# localghost:end ${sanitizedProjectName}`;
-  const pattern = new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}\\n?`, "m");
+  const pattern = getManagedBlockPattern(projectName);
 
   if (pattern.test(existing)) {
     return existing.replace(pattern, block);
   }
 
   return `${existing.trimEnd()}\n\n${block}`;
+}
+
+export function removeManagedBlock(existing: string, projectName: string) {
+  const pattern = getManagedBlockPattern(projectName);
+
+  if (!pattern.test(existing)) {
+    return existing;
+  }
+
+  return existing.replace(pattern, "").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+async function writeSystemHostsFile(hostsPath: string, next: string, projectName: string) {
+  const sanitizedProjectName = sanitizeProjectName(projectName);
+  const tempPath = join(tmpdir(), `localghost-${sanitizedProjectName}-hosts`);
+  writeFileSync(tempPath, next, "utf8");
+
+  if (process.platform === "win32") {
+    throw new Error(`Windows support: run as administrator and copy ${tempPath} to ${hostsPath}.`);
+  }
+
+  await execa("sudo", ["cp", tempPath, hostsPath], { stdio: "inherit" });
+
+  return tempPath;
 }
 
 export async function updateSystemHosts(projectName: string, entries: DevHostEntry[]): Promise<UpdateSystemHostsResult> {
@@ -56,14 +88,22 @@ export async function updateSystemHosts(projectName: string, entries: DevHostEnt
     return { changed: false, hostsPath };
   }
 
-  const tempPath = join(tmpdir(), `localghost-${sanitizedProjectName}-hosts`);
-  writeFileSync(tempPath, next, "utf8");
-
-  if (process.platform === "win32") {
-    throw new Error(`Windows support: run as administrator and copy ${tempPath} to ${hostsPath}.`);
-  }
-
-  await execa("sudo", ["cp", tempPath, hostsPath], { stdio: "inherit" });
+  const tempPath = await writeSystemHostsFile(hostsPath, next, sanitizedProjectName);
 
   return { changed: true, hostsPath, tempPath };
+}
+
+export async function removeSystemHosts(projectName: string): Promise<RemoveSystemHostsResult> {
+  const sanitizedProjectName = sanitizeProjectName(projectName);
+  const hostsPath = getSystemHostsPath();
+  const existing = readTextFile(hostsPath);
+  const next = removeManagedBlock(existing, sanitizedProjectName);
+
+  if (next === existing) {
+    return { changed: false, removed: false, hostsPath };
+  }
+
+  const tempPath = await writeSystemHostsFile(hostsPath, next, sanitizedProjectName);
+
+  return { changed: true, removed: true, hostsPath, tempPath };
 }

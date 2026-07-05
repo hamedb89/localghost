@@ -8,6 +8,8 @@ Buh. Friendly local hostnames for app repos.
 
 Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
 
+[Website](https://hamedb89.github.io/localghost/) · [npm](https://www.npmjs.com/package/@hamedb89/localghost) · [GitHub](https://github.com/hamedb89/localghost)
+
 ## What It Does
 
 - Creates and reads `.localghost` in your app repo.
@@ -16,7 +18,7 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 - Generates `ops/local/Caddyfile` for local HTTPS reverse proxying.
 - Checks whether Caddy is installed, but does not run Homebrew for you.
 - Provides a Vite plugin that sets explicit `server.allowedHosts` entries.
-- Prints parsed config as JSON for scripts, Codex, agents, and future MCP tools.
+- Prints parsed config and project-local state as JSON for scripts, Codex, agents, and future MCP tools.
 
 <p align="center">
   <img src="./assets/localghost-app-icon.png" alt="Localghost app icon" width="180">
@@ -107,6 +109,8 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:setup": "localghost setup",
     "localghost:proxy": "localghost dev",
     "localghost:print": "localghost print",
+    "localghost:status": "localghost status",
+    "localghost:teardown": "localghost teardown",
     "localghost:doctor": "localghost doctor"
   }
 }
@@ -166,6 +170,9 @@ localghost doctor
 localghost setup
 localghost setup --project app
 localghost setup --config .localghost.preview
+localghost status
+localghost teardown
+localghost teardown --remove-caddyfile
 localghost dev --config-pattern '^\.localghost\.'
 localghost print
 ```
@@ -180,6 +187,29 @@ localghost print
 
 Localghost does not rewrite the whole hosts file. It replaces only its own managed block for the selected project.
 
+## Teardown And State
+
+`setup` writes a project-local state file at `ops/local/localghost-state.json`. It records the last Localghost action, selected config path, generated Caddyfile path, hosts file path, and the host entries that were applied. This is durable enough for project tooling and avoids relying on OS temp folders for tracking. Most apps should treat it as generated local state and ignore it in git.
+
+```sh
+localghost status
+localghost status --json
+```
+
+When a project no longer needs Localghost, teardown removes only the managed hosts block for the selected project:
+
+```sh
+localghost teardown
+```
+
+The generated Caddyfile is left in place by default. Remove it explicitly when you want a fuller cleanup:
+
+```sh
+localghost teardown --remove-caddyfile
+```
+
+Localghost still uses a short-lived OS temp file while copying `/etc/hosts` with `sudo`, but that temp file is not the source of truth.
+
 ## API
 
 ```ts
@@ -187,6 +217,8 @@ import {
   getConfigFileCandidates,
   initLocalghost,
   readDevHosts,
+  readLocalghostState,
+  removeSystemHosts,
   renderCaddyfile,
   renderHostsBlock,
   runDoctor,
@@ -205,39 +237,14 @@ import { localGhostPlugin } from "@hamedb89/localghost/vite";
 
 `localHostsPlugin` is also exported as a compatibility alias.
 
-## Brand And Flows
+## More Docs
 
 Localghost copy can be mysterious, goofy, magical, funny, and a little absurd. The product behavior should stay boring in the best way: explicit commands, exact paths, clear errors, and no hidden installs.
 
+- [Website](https://hamedb89.github.io/localghost/)
 - [Brand guidelines](./docs/brand.md)
 - [Job-to-be-done flows](./docs/flows.md)
 - [CLI reference](./docs/localghost.1.md)
-- [GitHub discoverability and Pages notes](./docs/github.md)
-
-## GitHub Pages
-
-The repo includes a small static site in `site/` and a Pages workflow at `.github/workflows/pages.yml`.
-
-```sh
-npm run site:build
-```
-
-That builds `_site/` from `site/` plus the existing `assets/` folder. On `main`, GitHub Actions uploads `_site/` to GitHub Pages, so the public site can live at `https://hamedb89.github.io/localghost/` without duplicating image assets in the repo.
-
-## Publishing
-
-The recommended first setup is:
-
-- GitHub repo: `hamedb89/localghost`
-- npm package: `@hamedb89/localghost`
-- CLI binary: `localghost`
-
-The unscoped npm name `localghost` is already taken. A future `@localghost/*` npm scope can still make sense if Localghost becomes a multi-package project, but the personal scope is the clean path you can own now.
-
-```sh
-npm run release:check
-npm publish --access public
-```
 
 ## Assets
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
+import { existsSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
-import { getProjectName, readDevHosts, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
-import { validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
+import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
+import { getCaddyfilePath, validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
-import { updateSystemHosts } from "./hosts-file.js";
+import { removeSystemHosts, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
+import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   const localHosts = findLocalMdnsHosts(entries);
@@ -145,7 +147,9 @@ program
     await assertCaddyReady();
 
     const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
-    const entries = readDevHosts(readOptionsFromCli(options));
+    const readOptions = readOptionsFromCli(options);
+    const configPath = resolveDevHostsPath(readOptions).path;
+    const entries = readDevHosts(readOptions);
 
     warnAboutLocalMdns(entries);
 
@@ -160,8 +164,91 @@ program
     const caddyfile = await writeCaddyfile(entries, options.cwd);
     await validateCaddyfile(caddyfile);
 
+    const statePath = writeLocalghostState(options.cwd, {
+      action: "setup",
+      projectName,
+      cwd: options.cwd,
+      configPath,
+      hostsPath: hostsResult.hostsPath,
+      hostsChanged: hostsResult.changed,
+      ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
+      caddyfilePath: caddyfile,
+      entries
+    });
+
     console.log(`Generated ${caddyfile}`);
+    console.log(`State ${statePath}`);
     console.log("Setup complete.");
+  });
+
+program
+  .command("teardown")
+  .description("Remove Localghost's managed /etc/hosts block")
+  .option("--project <name>", "Managed /etc/hosts block name")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--remove-caddyfile", "Also remove ops/local/Caddyfile")
+  .action(async (options: { project?: string; cwd: string; removeCaddyfile?: boolean }) => {
+    const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
+    const hostsResult = await removeSystemHosts(projectName);
+    const caddyfilePath = getCaddyfilePath(options.cwd);
+    let caddyfileRemoved = false;
+
+    if (options.removeCaddyfile && existsSync(caddyfilePath)) {
+      unlinkSync(caddyfilePath);
+      caddyfileRemoved = true;
+    }
+
+    const statePath = writeLocalghostState(options.cwd, {
+      action: "teardown",
+      projectName,
+      cwd: options.cwd,
+      hostsPath: hostsResult.hostsPath,
+      hostsChanged: hostsResult.changed,
+      ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
+      caddyfilePath,
+      caddyfileRemoved
+    });
+
+    if (hostsResult.removed) {
+      console.log(`Removed Localghost hosts block from ${hostsResult.hostsPath}`);
+    } else {
+      console.log(`No Localghost hosts block found in ${hostsResult.hostsPath}`);
+    }
+
+    if (options.removeCaddyfile) {
+      console.log(caddyfileRemoved ? `Removed ${caddyfilePath}` : `${caddyfilePath} was not present`);
+    }
+
+    console.log(`State ${statePath}`);
+  });
+
+program
+  .command("status")
+  .description("Print Localghost's project-local state file")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--json", "Print raw JSON")
+  .action((options: { cwd: string; json?: boolean }) => {
+    const state = readLocalghostState(options.cwd);
+    const statePath = getLocalghostStatePath(options.cwd);
+
+    if (!state) {
+      console.log(`No Localghost state found at ${statePath}`);
+      return;
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(state, null, 2));
+      return;
+    }
+
+    console.log(`State: ${statePath}`);
+    console.log(`Last action: ${state.action}`);
+    console.log(`Updated: ${state.updatedAt}`);
+    console.log(`Project: ${state.projectName}`);
+    if (state.configPath) console.log(`Config: ${state.configPath}`);
+    if (state.hostsPath) console.log(`Hosts: ${state.hostsPath}`);
+    if (state.caddyfilePath) console.log(`Caddyfile: ${state.caddyfilePath}`);
+    if (typeof state.caddyfileRemoved === "boolean") console.log(`Caddyfile removed: ${state.caddyfileRemoved}`);
   });
 
 program

@@ -15,6 +15,10 @@ function groupByPort(entries: DevHostEntry[]) {
   return groups;
 }
 
+export function getCaddyfilePath(cwd = process.cwd()) {
+  return join(cwd, "ops/local/Caddyfile");
+}
+
 export function renderCaddyfile(entries: DevHostEntry[]) {
   const groups = groupByPort(entries);
   const blocks = [...groups.entries()]
@@ -39,7 +43,7 @@ ${blocks.join("\n\n")}
 }
 
 export async function writeCaddyfile(entries: DevHostEntry[], cwd = process.cwd()) {
-  const path = join(cwd, "ops/local/Caddyfile");
+  const path = getCaddyfilePath(cwd);
   writeTextFile(path, renderCaddyfile(entries));
   return path;
 }

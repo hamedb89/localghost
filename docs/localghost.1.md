@@ -10,13 +10,15 @@ localghost - friendly local hostnames for app repos
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex]
+localghost teardown [--project name] [--remove-caddyfile]
+localghost status [--json]
 localghost dev [--config file] [--config-pattern regex]
 localghost print [--config file] [--config-pattern regex]
 ```
 
 ## Description
 
-Localghost reads `.localghost`, writes a managed `/etc/hosts` block, generates `ops/local/Caddyfile`, and runs a Caddy local HTTPS proxy. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, and no broad Vite `allowedHosts: true` shortcut.
+Localghost reads `.localghost`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local HTTPS proxy. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, and no broad Vite `allowedHosts: true` shortcut.
 
 ## Commands
 
@@ -57,6 +59,22 @@ Updates the managed Localghost block in `/etc/hosts`, writes `ops/local/Caddyfil
 localghost setup --project app
 ```
 
+### teardown
+
+Removes the managed Localghost block from `/etc/hosts` for the selected project and records the action in `ops/local/localghost-state.json`. It leaves `ops/local/Caddyfile` in place unless `--remove-caddyfile` is passed.
+
+```sh
+localghost teardown --remove-caddyfile
+```
+
+### status
+
+Prints Localghost's project-local state file. Pass `--json` for scripts and agents.
+
+```sh
+localghost status --json
+```
+
 ### dev
 
 Writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`.
@@ -78,6 +96,7 @@ localghost print
 - `.localghost`: default project hostname config.
 - custom config files: pass `--config <file>` or `--config-pattern <regex>`.
 - `ops/local/Caddyfile`: generated local Caddy config.
+- `ops/local/localghost-state.json`: last setup or teardown action.
 - `/etc/hosts`: managed block only, bounded by `# localghost:start` and `# localghost:end`.
 
 ## Exit Status

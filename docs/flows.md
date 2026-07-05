@@ -79,6 +79,28 @@ export default {
 };
 ```
 
+## Teardown
+
+As a developer, I want to cleanly remove Localghost from a project when the repo is archived or no longer needs friendly hostnames.
+
+```sh
+yarn localghost teardown
+yarn localghost teardown --remove-caddyfile
+```
+
+`teardown` removes only the Localghost managed `/etc/hosts` block. The generated Caddyfile is kept unless `--remove-caddyfile` is passed.
+
+## State Tracking
+
+As a developer or agent, I want to see what Localghost changed without reading system files directly.
+
+```sh
+yarn localghost status
+yarn localghost status --json
+```
+
+Localghost records setup and teardown in `ops/local/localghost-state.json`. That file is project-local state, not OS temp state.
+
 ## Agent-Friendly Tools
 
 As a Codex or agent user, I want commands that are inspectable and scriptable without opening a browser.
