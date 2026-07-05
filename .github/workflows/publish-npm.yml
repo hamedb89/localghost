@@ -9,6 +9,9 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
 jobs:
   publish:
     if: github.repository == 'hamedb89/localghost'
@@ -16,20 +19,24 @@ jobs:
     environment: npm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Enable package manager
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: corepack npm ci
 
       - name: Verify package and site
-        run: npm run release:check
+        run: corepack npm run release:check
 
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        run: corepack npm publish --access public --provenance

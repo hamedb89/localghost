@@ -75,6 +75,14 @@ Prints Localghost's project-local state file. Pass `--json` for scripts and agen
 localghost status --json
 ```
 
+### routes
+
+Prints the local domain layer as `domain -> upstream` routes. Pass `--http` if the browser-facing domain should be shown as plain HTTP.
+
+```sh
+localghost routes
+```
+
 ### dev
 
 Writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`.

@@ -15,6 +15,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -24,21 +27,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Enable package manager
+        run: corepack enable
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
 
       - name: Build static site
-        run: npm run site:build
+        run: corepack npm run site:build
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
@@ -51,4 +61,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -120,6 +120,7 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:setup": "localghost setup",
     "localghost:proxy": "localghost dev",
     "localghost:print": "localghost print",
+    "localghost:routes": "localghost routes",
     "localghost:status": "localghost status",
     "localghost:teardown": "localghost teardown",
     "localghost:doctor": "localghost doctor"

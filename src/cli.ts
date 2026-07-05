@@ -8,6 +8,7 @@ import { checkCaddy, runDoctor } from "./doctor.js";
 import { removeSystemHosts, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
+import { formatDomainRoutes } from "./routes.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
@@ -18,6 +19,10 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
       `Warning: .local can collide with mDNS/Bonjour. Prefer .localhost for dev hosts: ${localHosts.join(", ")}`
     );
   }
+}
+
+function logDomainRoutes(entries: ReturnType<typeof readDevHosts>) {
+  console.log(formatDomainRoutes(entries));
 }
 
 function parsePort(value: string) {
@@ -152,6 +157,7 @@ program
     const entries = readDevHosts(readOptions);
 
     warnAboutLocalMdns(entries);
+    logDomainRoutes(entries);
 
     const hostsResult = await updateSystemHosts(projectName, entries);
 
@@ -252,6 +258,19 @@ program
   });
 
 program
+  .command("routes")
+  .description("Print domain to upstream routes")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--http", "Print domain URLs with http instead of https")
+  .action((options: ConfigCliOptions & { http?: boolean }) => {
+    const entries = readDevHosts(readOptionsFromCli(options));
+    warnAboutLocalMdns(entries);
+    console.log(formatDomainRoutes(entries, { https: !options.http }));
+  });
+
+program
   .command("dev")
   .description("Generate Caddyfile and run Caddy")
   .option("--cwd <path>", "Project directory", process.cwd())
@@ -263,6 +282,7 @@ program
     const entries = readDevHosts(readOptionsFromCli(options));
 
     warnAboutLocalMdns(entries);
+    logDomainRoutes(entries);
 
     const caddyfile = await writeCaddyfile(entries, options.cwd);
     await validateCaddyfile(caddyfile);

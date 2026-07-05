@@ -67,6 +67,22 @@ yarn localghost print --config-pattern '^\.localghost\.(private|preview)$'
 
 Localghost uses the first existing configured file. Regex discovery scans filenames in the project root.
 
+## Domain Routing
+
+As a developer, I want to see the local domain layer as a simple `domain -> upstream` map.
+
+```sh
+yarn localghost routes
+```
+
+```txt
+localghost routes
+  https://app.localhost/ -> http://127.0.0.1:5173
+  https://api.app.localhost/ -> http://127.0.0.1:8787
+```
+
+`setup` and `dev` print this same map before Caddy is validated or run.
+
 ## Vite Integration
 
 As a Vite user, I want Localghost to set strict `allowedHosts` and print the browser-facing HTTPS URLs.
