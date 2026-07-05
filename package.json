@@ -48,6 +48,7 @@
     "pack:dry": "npm pack --dry-run",
     "release:check": "npm run typecheck && npm run build && npm run site:build && npm pack --dry-run",
     "site:build": "node scripts/build-site.mjs",
+    "version": "node scripts/sync-readme-version.mjs && git add README.md",
     "publish:public": "npm publish --access public --provenance"
   },
   "dependencies": {
