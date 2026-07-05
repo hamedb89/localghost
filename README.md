@@ -6,7 +6,7 @@
 
 Buh. Friendly local hostnames for app repos.
 
-Localghost gives each project one small contract for local domains, Caddy, Vite, and the system hosts file. It is for developers who want to open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
+Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
 
 ## What It Does
 
@@ -195,6 +195,7 @@ Localghost copy can be mysterious, goofy, magical, funny, and a little absurd. T
 - [Brand guidelines](./docs/brand.md)
 - [Job-to-be-done flows](./docs/flows.md)
 - [CLI reference](./docs/localghost.1.md)
+- [GitHub discoverability notes](./docs/github.md)
 
 ## Publishing
 

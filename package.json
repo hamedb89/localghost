@@ -1,7 +1,7 @@
 {
   "name": "@hamedb89/localghost",
   "version": "0.1.0",
-  "description": "Friendly local hostnames for app repos, powered by /etc/hosts, Caddy, and Vite.",
+  "description": "Friendly local HTTPS hostnames for app repos with .localghost, Caddy, /etc/hosts, and Vite.",
   "type": "module",
   "bin": {
     "localghost": "./dist/cli.js"
@@ -25,13 +25,18 @@
   ],
   "keywords": [
     "localghost",
-    "local-dev",
     "localhost",
-    "hosts",
+    "local-dev",
+    "local-development",
+    "local-https",
+    "https",
     "caddy",
     "vite",
-    "https",
-    "developer-tools"
+    "vite-plugin",
+    "hosts-file",
+    "reverse-proxy",
+    "developer-tools",
+    "cli"
   ],
   "scripts": {
     "clean": "rm -rf dist",
