@@ -16,7 +16,7 @@ import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
-import { findLocalMdnsHosts } from "./parse.js";
+import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
 import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes } from "./routes.js";
@@ -76,6 +76,16 @@ type ProxyModeCliOptions = {
   ssl?: boolean;
 };
 
+function contextOptionsFromCli(options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) {
+  return {
+    cwd: options.cwd,
+    ...(options.project ? { project: options.project } : {}),
+    ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
+    ...(options.configPattern ? { configPattern: options.configPattern } : {}),
+    ...(useHttps(options) ? { https: true } : {})
+  };
+}
+
 function readOptionsFromCli(options: ConfigCliOptions): ReadDevHostsOptions {
   return {
     cwd: options.cwd,
@@ -112,11 +122,18 @@ function getSetupCommand(options: { https?: boolean; config?: string[]; configPa
   return `localghost setup${configFlags}${options.https ? " --https" : ""}`;
 }
 
-function getSetupReadiness(options: ConfigCliOptions & { project?: string; https?: boolean; ignoreCaddyfile?: boolean }) {
-  const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
+function getSetupReadiness(options: ConfigCliOptions & {
+  project?: string;
+  https?: boolean;
+  ignoreCaddyfile?: boolean;
+  entries?: DevHostEntry[];
+  configPath?: string;
+  projectName?: string;
+}) {
+  const projectName = sanitizeProjectName(options.projectName ?? options.project ?? getProjectName(options.cwd));
   const readOptions = readOptionsFromCli(options);
-  const entries = readDevHosts(readOptions);
-  const configPath = resolveDevHostsPath(readOptions).path;
+  const entries = options.entries ?? readDevHosts(readOptions);
+  const configPath = options.configPath ?? resolveDevHostsPath(readOptions).path;
   const caddyfilePath = getCaddyfilePath(options.cwd);
   const statePath = getLocalghostStatePath(options.cwd);
   const state = readLocalghostState(options.cwd);
@@ -380,11 +397,11 @@ program
     assertLocalDevelopment("setup");
     await assertCaddyReady();
 
-    const https = useHttps(options);
-    const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
-    const readOptions = readOptionsFromCli(options);
-    const configPath = resolveDevHostsPath(readOptions).path;
-    const entries = readDevHosts(readOptions);
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    const https = context.https;
+    const projectName = context.projectName;
+    const configPath = context.configPath;
+    const entries = context.entries;
 
     warnAboutLocalMdns(entries);
     logDomainRoutes(entries, { https });
@@ -512,10 +529,17 @@ program
   .option("--https", "Check setup readiness for HTTPS mode")
   .option("--ssl", "Alias for --https")
   .option("--json", "Print raw JSON")
-  .action((options: ConfigCliOptions & { project?: string; ready?: boolean; json?: boolean } & ProxyModeCliOptions) => {
+  .action(async (options: ConfigCliOptions & { project?: string; ready?: boolean; json?: boolean } & ProxyModeCliOptions) => {
     const state = readLocalghostState(options.cwd);
     const statePath = getLocalghostStatePath(options.cwd);
-    const readiness = getSetupReadiness({ ...options, https: useHttps(options) });
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    const readiness = getSetupReadiness({
+      ...options,
+      https: context.https,
+      entries: context.entries,
+      configPath: context.configPath,
+      projectName: context.projectName
+    });
 
     if (options.json) {
       console.log(JSON.stringify({ state, setup: readiness }, null, 2));
@@ -561,10 +585,10 @@ program
   .option("--http", "Print domain URLs with http instead of https")
   .option("--https", "Print domain URLs with https")
   .option("--ssl", "Alias for --https")
-  .action((options: ConfigCliOptions & { http?: boolean } & ProxyModeCliOptions) => {
-    const entries = readDevHosts(readOptionsFromCli(options));
-    warnAboutLocalMdns(entries);
-    console.log(formatDomainRoutes(entries, { https: options.http ? false : useHttps(options) }));
+  .action(async (options: ConfigCliOptions & { http?: boolean } & ProxyModeCliOptions) => {
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    warnAboutLocalMdns(context.entries);
+    console.log(formatDomainRoutes(context.entries, { https: options.http ? false : context.https }));
   });
 
 program
@@ -581,8 +605,15 @@ program
     assertLocalDevelopment("dev");
     await assertCaddyReady();
 
-    const https = useHttps(options);
-    const readiness = getSetupReadiness({ ...options, https });
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    const https = context.https;
+    const readiness = getSetupReadiness({
+      ...options,
+      https,
+      entries: context.entries,
+      configPath: context.configPath,
+      projectName: context.projectName
+    });
 
     if (!readiness.ready) {
       if (!options.setup) {
@@ -660,17 +691,24 @@ program
     assertLocalDevelopment("run");
     await assertCaddyReady();
 
-    const https = useHttps(options);
     const context = await resolveLocalghostContext({
       cwd: options.cwd,
       ...(options.project ? { project: options.project } : {}),
       ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
       ...(options.configPattern ? { configPattern: options.configPattern } : {}),
       ...(options.port ? { port: options.port } : {}),
-      https,
+      ...(useHttps(options) ? { https: true } : {}),
       ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {})
     });
-    const readiness = getSetupReadiness({ ...options, https, ignoreCaddyfile: true });
+    const https = context.https;
+    const readiness = getSetupReadiness({
+      ...options,
+      https,
+      ignoreCaddyfile: true,
+      entries: context.entries,
+      configPath: context.configPath,
+      projectName: context.projectName
+    });
 
     if (!readiness.ready) {
       const shouldSetup = options.setup === true || (canPrompt() && await confirm("Run caddy:setup now?", true));

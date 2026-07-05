@@ -22,7 +22,7 @@ localghost print [--config file] [--config-pattern regex]
 
 ## Description
 
-Localghost reads `.localghost`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local proxy. HTTP is the default; local HTTPS is explicit with `--https` or `--ssl`. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, no surprise browser tabs, and no broad Vite `allowedHosts: true` shortcut.
+Localghost reads `.localghost`, optionally reads `localghost.config.mjs`, writes a managed `/etc/hosts` block, records `ops/local/localghost-state.json`, generates `ops/local/Caddyfile`, and runs a Caddy local proxy. HTTP is the default; local HTTPS is explicit with `--https`, `--ssl`, or `https: true` in `localghost.config.mjs`. It is intentionally small and explicit: no hidden installs, no full hosts-file rewrites, no surprise browser tabs, and no broad Vite `allowedHosts: true` shortcut.
 
 Localghost checks npm for newer releases after successful commands. The check is best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
 
@@ -136,6 +136,8 @@ localghost run --dynamic-port -- turbo dev
 
 Pass `--dynamic-port` or `--dynamic-port=yes` to start at the configured port and walk upward until `127.0.0.1:<port>` is free. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
 
+When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as the shared context. This keeps `https`, `dynamicPort`, `project`, and `wwwAlias` decisions consistent.
+
 `dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 
 ### print
@@ -149,6 +151,7 @@ localghost print
 ## Files
 
 - `.localghost`: default project hostname config.
+- `localghost.config.mjs`: optional shared context for CLI and Vite settings.
 - custom config files: pass `--config <file>` or `--config-pattern <regex>`.
 - `ops/local/Caddyfile`: generated local Caddy config.
 - `ops/local/localghost-state.json`: last setup or teardown action.

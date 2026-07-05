@@ -195,6 +195,31 @@ Then keep persistent dev tasks uncached:
 
 `localghost run` resolves one shared Localghost context, starts Caddy, passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
 
+When settings need to be shared by the CLI wrapper and the Vite plugin, put them in `localghost.config.mjs`:
+
+```js
+import { defineLocalghostConfig } from "@hamedb89/localghost";
+
+export default defineLocalghostConfig({
+  project: "app",
+  port: 5173,
+  https: true,
+  dynamicPort: true
+});
+```
+
+Then the daily script can stay small:
+
+```json
+{
+  "scripts": {
+    "dev": "localghost run -- vite"
+  }
+}
+```
+
+`www.` aliases are enabled by default. A `.localghost` entry like `app.localhost 5173` also sets up `www.app.localhost` unless `wwwAlias: false` is set in `localghost.config.mjs`.
+
 `localghost dev` and `localghost run` also register their active sessions in a user-local activity file. Use `localghost ps` to see the Localghost apps currently running on the machine:
 
 ```txt
@@ -219,14 +244,13 @@ export default defineConfig({
   plugins: [
     localGhostPlugin({
       port: 5173,
-      dynamicPort: true,
       configFiles: [".localghost.private", ".localghost"]
     })
   ]
 });
 ```
 
-The plugin binds Vite to `127.0.0.1` by default, prints the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops. When `dynamicPort` is enabled, the plugin uses the configured port when available and otherwise moves to the next free port before Vite starts.
+The plugin binds Vite to `127.0.0.1` by default, prints the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops. When `dynamicPort` is enabled in plugin options or `localghost.config.mjs`, the plugin uses the configured port when available and otherwise moves to the next free port before Vite starts.
 
 If `.localghost` is missing and Vite is running in an interactive terminal, the plugin asks whether to create one, prompts for the primary domain and optional extra domains, and then asks whether to run setup. Before touching `/etc/hosts`, it explains why macOS may ask for your password and confirms that only Localghost's managed block is changed.
 

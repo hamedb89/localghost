@@ -9,7 +9,7 @@ import {
   type ConfigPattern,
   type ReadDevHostsOptions
 } from "./config.js";
-import { resolveLocalghostContext, type LocalghostContext } from "./context.js";
+import { addDefaultWwwAliases, resolveLocalghostContext, type LocalghostContext } from "./context.js";
 import { checkCaddy } from "./doctor.js";
 import { isProductionLike } from "./env.js";
 import { writeTextFile } from "./fs.js";
@@ -31,6 +31,8 @@ export type LocalGhostPluginOptions = {
   primaryHost?: string;
   log?: boolean;
   setup?: boolean | "prompt";
+  localghostConfig?: string | false;
+  wwwAlias?: boolean;
 };
 
 type ServerOptions = NonNullable<UserConfig["server"]>;
@@ -91,8 +93,13 @@ function getConfigWatchFiles(options: LocalGhostPluginOptions) {
   const cwd = readOptions.cwd ?? process.cwd();
   const resolvedPath = resolveDevHostsPath(readOptions);
   const candidatePaths = getConfigFileCandidates(readOptions).map((fileName) => resolve(cwd, fileName));
+  const projectConfigPaths = options.localghostConfig === false
+    ? []
+    : options.localghostConfig
+      ? [resolve(cwd, options.localghostConfig)]
+      : ["localghost.config.mjs", "localghost.config.js", "localghost.config.cjs"].map((fileName) => resolve(cwd, fileName));
 
-  return [...new Set([...candidatePaths, resolvedPath.path])];
+  return [...new Set([...candidatePaths, resolvedPath.path, ...projectConfigPaths])];
 }
 
 function normalizeWatchPath(filePath: string) {
@@ -122,7 +129,7 @@ async function promptForHosts(cwd: string, port: number) {
     if (host) hosts.push(host.toLowerCase());
   }
 
-  return [...new Set(hosts)];
+  return [...new Set(addDefaultWwwAliases(hosts.map((host) => ({ host, port, target: `127.0.0.1:${port}` }))).map((entry) => entry.host))];
 }
 
 function hasReadySetup(cwd: string, entries: DevHostEntry[], configPath: string, https: boolean) {
@@ -171,7 +178,7 @@ async function setupProject(cwd: string, entries: DevHostEntry[], configPath: st
   });
 }
 
-async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePort: number, https: boolean) {
+async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePort: number, https: boolean | undefined) {
   const cwd = options.cwd ?? process.cwd();
   const readOptions = readOptionsFromPlugin(options);
   const resolved = resolveDevHostsPath(readOptions);
@@ -197,15 +204,15 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
     ...options,
     cwd,
     port: vitePort,
-    https
+    ...(typeof https === "boolean" ? { https } : {})
   });
 
-  if (!hasReadySetup(cwd, context.entries, resolved.path, https)) {
+  if (!hasReadySetup(cwd, context.entries, resolved.path, context.https)) {
     if (options.setup === false || !canPrompt()) return context;
 
     const setup = await confirm("Run caddy:setup now?", true);
     if (setup) {
-      await setupProject(cwd, context.entries, resolved.path, https);
+      await setupProject(cwd, context.entries, resolved.path, context.https);
       console.log(`All set. Setup state: ${getLocalghostStatePath(cwd)}`);
     }
   }
@@ -216,6 +223,7 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
 export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin {
   let resolvedEntries: DevHostEntry[] = [];
   let resolvedVitePort: number | undefined;
+  let resolvedHttps = false;
   let restartTimer: NodeJS.Timeout | undefined;
 
   return {
@@ -233,13 +241,14 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
         options.port ??
         existingServer.port ??
         (Number.isInteger(envVitePort) ? envVitePort : 5173);
-      const context: LocalghostContext = await ensureLocalghostContext(options, requestedVitePort, Boolean(options.https));
+      const context: LocalghostContext = await ensureLocalghostContext(options, requestedVitePort, options.https);
       const entries = context.entries;
       const hosts = context.hosts;
       const primaryHost = context.primaryHost;
 
       resolvedEntries = entries;
       resolvedVitePort = context.port;
+      resolvedHttps = context.https;
 
       const server: ServerOptions = {
         ...existingServer,
@@ -255,7 +264,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
         server.port = context.port;
       }
 
-      if (options.https && primaryHost) {
+      if (context.https && primaryHost) {
         const existingWs = typeof server.ws === "object" && server.ws ? server.ws : {};
         const existingHmr = typeof existingServer.hmr === "object" && existingServer.hmr ? existingServer.hmr : {};
 
@@ -314,7 +323,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
 
       if (options.log !== false) {
         server.printUrls = () => {
-          printLocalHosts(server, resolvedEntries, resolvedVitePort, Boolean(options.https));
+          printLocalHosts(server, resolvedEntries, resolvedVitePort, resolvedHttps);
         };
       }
     }
