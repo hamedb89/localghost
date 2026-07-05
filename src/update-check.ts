@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export const LOCALGHOST_PACKAGE_NAME = "@hamedb89/localghost";
-export const LOCALGHOST_VERSION = "0.1.7";
+export const LOCALGHOST_VERSION = "0.1.8";
 export const UPDATE_CHECK_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const UPDATE_CHECK_NOTIFY_TTL_MS = 24 * 60 * 60 * 1000;
 export const UPDATE_CHECK_TIMEOUT_MS = 900;
