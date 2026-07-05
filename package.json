@@ -17,6 +17,7 @@
     }
   },
   "files": [
+    "apps/macos-widget",
     "dist",
     "assets",
     "docs",
@@ -41,6 +42,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsup src/index.ts src/vite.ts src/cli.ts --format esm --dts",
+    "macos:widget:build": "bash apps/macos-widget/build.sh",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "prepack": "npm run build",

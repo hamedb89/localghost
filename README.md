@@ -242,6 +242,19 @@ app  run: vite
 
 Pass `--json` when another helper, such as a menu bar app, needs to poll the same state.
 
+## macOS Widget
+
+Localghost includes a tiny native macOS menu-bar widget in `apps/macos-widget`. It shows `LG n` in the top bar, where `n` is the number of active Localghost-managed apps, and its menu lists each project, route, target port, and listening state.
+
+Build it from source:
+
+```sh
+npm run build
+npm run macos:widget:build
+```
+
+The app bundle is written to `dist/LocalghostWidget.app`. See [docs/macos-widget.md](./docs/macos-widget.md) for local development notes.
+
 ## Vite
 
 ```ts
