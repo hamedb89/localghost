@@ -45,7 +45,8 @@
     "typecheck": "tsc --noEmit",
     "prepack": "npm run build",
     "pack:dry": "npm pack --dry-run",
-    "release:check": "npm run typecheck && npm run build && npm pack --dry-run"
+    "release:check": "npm run typecheck && npm run build && npm pack --dry-run",
+    "site:build": "node scripts/build-site.mjs"
   },
   "dependencies": {
     "commander": "^14.0.0",
@@ -75,7 +76,7 @@
     "type": "git",
     "url": "git+https://github.com/hamedb89/localghost.git"
   },
-  "homepage": "https://github.com/hamedb89/localghost#readme",
+  "homepage": "https://hamedb89.github.io/localghost/",
   "bugs": {
     "url": "https://github.com/hamedb89/localghost/issues"
   },

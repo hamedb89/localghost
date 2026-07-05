@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Localghost - Friendly local HTTPS hostnames</title>
+    <meta name="description" content="Localghost is a tiny Node.js CLI for friendly local HTTPS hostnames with .localghost configs, Caddy, /etc/hosts, and Vite allowedHosts.">
+    <meta property="og:title" content="Localghost">
+    <meta property="og:description" content="Friendly local HTTPS hostnames for app repos.">
+    <meta property="og:image" content="assets/localghost-banner.png">
+    <meta name="theme-color" content="#6d3ff2">
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0b1552;
+        --muted: #5f668b;
+        --line: #dfe3ff;
+        --paper: #ffffff;
+        --mist: #f6f8ff;
+        --violet: #6d3ff2;
+        --cyan: #6dd9e7;
+        --navy: #080f3f;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      a { color: inherit; }
+
+      .hero {
+        min-height: 86vh;
+        display: grid;
+        align-items: center;
+        background:
+          radial-gradient(circle at 82% 20%, rgba(109, 63, 242, 0.14), transparent 30%),
+          linear-gradient(180deg, #ffffff 0%, var(--mist) 100%);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .wrap {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 22px 0;
+      }
+
+      .nav-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .brand img { width: 36px; height: 36px; border-radius: 9px; }
+
+      .links {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .links a { text-decoration: none; }
+      .links a:hover { color: var(--ink); }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.03fr 0.97fr;
+        gap: 52px;
+        align-items: center;
+        padding: 110px 0 54px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--violet);
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(48px, 8vw, 96px);
+        line-height: 0.92;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        margin: 24px 0 0;
+        max-width: 680px;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.55;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 30px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 800;
+        border: 1px solid var(--line);
+      }
+
+      .button.primary {
+        color: #fff;
+        background: var(--navy);
+        border-color: var(--navy);
+      }
+
+      .button.secondary { background: #fff; }
+
+      .terminal {
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid #20275f;
+        background: #080f3f;
+        color: #eef1ff;
+        box-shadow: 0 24px 80px rgba(8, 15, 63, 0.24);
+      }
+
+      .terminal-bar {
+        display: flex;
+        gap: 7px;
+        padding: 13px 15px;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+      }
+
+      .dot { width: 10px; height: 10px; border-radius: 999px; background: var(--cyan); opacity: 0.9; }
+      .dot:nth-child(2) { background: #a78bfa; }
+      .dot:nth-child(3) { background: #fff; opacity: 0.7; }
+
+      pre {
+        margin: 0;
+        padding: 22px;
+        white-space: pre-wrap;
+        font: 15px/1.7 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      .section {
+        padding: 72px 0;
+      }
+
+      .section h2 {
+        margin: 0 0 24px;
+        font-size: 34px;
+        letter-spacing: 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: #fff;
+      }
+
+      .card h3 { margin: 0 0 10px; font-size: 18px; }
+      .card p { margin: 0; color: var(--muted); line-height: 1.55; }
+
+      .mascot {
+        width: min(360px, 80%);
+        display: block;
+        margin: 0 auto 28px;
+      }
+
+      footer {
+        padding: 32px 0;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 800px) {
+        .nav { position: static; }
+        .nav-inner { align-items: flex-start; }
+        .links { flex-wrap: wrap; justify-content: flex-end; }
+        .hero-grid { grid-template-columns: 1fr; padding-top: 32px; }
+        .grid { grid-template-columns: 1fr; }
+        .hero { min-height: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav">
+        <div class="wrap nav-inner">
+          <a class="brand" href=".">
+            <img src="assets/localghost-app-icon.png" alt="">
+            <span>Localghost</span>
+          </a>
+          <div class="links" aria-label="Project links">
+            <a href="https://github.com/hamedb89/localghost">GitHub</a>
+            <a href="https://www.npmjs.com/package/@hamedb89/localghost">npm</a>
+            <a href="https://github.com/hamedb89/localghost#readme">Docs</a>
+          </div>
+        </div>
+      </nav>
+
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow">Buh. Friendly local hostnames.</p>
+          <h1>Localghost</h1>
+          <p class="lead">A tiny Node.js CLI for local HTTPS domains in app repos. Use one `.localghost` contract for Caddy, `/etc/hosts`, Vite `allowedHosts`, and clean browser-facing URLs.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/hamedb89/localghost">View on GitHub</a>
+            <a class="button secondary" href="https://www.npmjs.com/package/@hamedb89/localghost">Install from npm</a>
+          </div>
+        </div>
+        <div>
+          <img class="mascot" src="assets/localghost-mascot.png" alt="Localghost mascot with a magic wand">
+          <div class="terminal" aria-label="Localghost install example">
+            <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <pre>yarn add -D @hamedb89/localghost
+
+yarn localghost init --write-scripts
+yarn localghost doctor
+yarn localghost:setup
+yarn localghost:proxy</pre>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="wrap">
+          <h2>One small contract for local dev</h2>
+          <div class="grid">
+            <article class="card">
+              <h3>.localghost</h3>
+              <p>Map friendly `.localhost` names to app ports in a plain text file that humans and agents can inspect.</p>
+            </article>
+            <article class="card">
+              <h3>Caddy and hosts</h3>
+              <p>Generate local HTTPS proxy config and update only Localghost's managed block in `/etc/hosts`.</p>
+            </article>
+            <article class="card">
+              <h3>Vite-safe defaults</h3>
+              <p>Set explicit `server.allowedHosts` entries without opening the broad `allowedHosts: true` shortcut.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">MIT licensed. Built for friendly local development without surprise spells.</div>
+    </footer>
+  </body>
+</html>

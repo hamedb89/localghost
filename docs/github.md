@@ -63,7 +63,7 @@ After creating `hamedb89/localghost`, this sets the public repo metadata:
 ```sh
 gh repo edit hamedb89/localghost \
   --description "Friendly local HTTPS hostnames for app repos. A tiny CLI for .localghost configs, /etc/hosts blocks, Caddy reverse proxies, and Vite allowedHosts." \
-  --homepage "https://www.npmjs.com/package/@hamedb89/localghost" \
+  --homepage "https://hamedb89.github.io/localghost/" \
   --add-topic localhost \
   --add-topic local-development \
   --add-topic local-https \
@@ -85,3 +85,27 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 ```
 
 That phrasing helps GitHub search and npm search without making the README feel like SEO sludge.
+
+## GitHub Pages
+
+The repo ships a static marketing page in `site/` and deploys it with `.github/workflows/pages.yml`.
+
+Local build:
+
+```sh
+npm run site:build
+```
+
+The build script writes `_site/`, copies `site/` into it, then copies the existing `assets/` folder into `_site/assets`. This keeps GitHub Pages support out of the npm package payload and avoids committing duplicate images.
+
+After the repo is created, enable GitHub Pages with GitHub Actions as the source. The site URL should be:
+
+```txt
+https://hamedb89.github.io/localghost/
+```
+
+Recommended repo homepage:
+
+```txt
+https://hamedb89.github.io/localghost/
+```

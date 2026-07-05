@@ -28,18 +28,6 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 yarn add -D @hamedb89/localghost
 ```
 
-With npm:
-
-```sh
-npm install -D @hamedb89/localghost
-```
-
-With pnpm:
-
-```sh
-pnpm add -D @hamedb89/localghost
-```
-
 ## Quick Start
 
 Create the project config and optional package scripts:
@@ -224,7 +212,17 @@ Localghost copy can be mysterious, goofy, magical, funny, and a little absurd. T
 - [Brand guidelines](./docs/brand.md)
 - [Job-to-be-done flows](./docs/flows.md)
 - [CLI reference](./docs/localghost.1.md)
-- [GitHub discoverability notes](./docs/github.md)
+- [GitHub discoverability and Pages notes](./docs/github.md)
+
+## GitHub Pages
+
+The repo includes a small static site in `site/` and a Pages workflow at `.github/workflows/pages.yml`.
+
+```sh
+npm run site:build
+```
+
+That builds `_site/` from `site/` plus the existing `assets/` folder. On `main`, GitHub Actions uploads `_site/` to GitHub Pages, so the public site can live at `https://hamedb89.github.io/localghost/` without duplicating image assets in the repo.
 
 ## Publishing
 
