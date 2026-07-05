@@ -6,6 +6,9 @@
 
 Buh. Friendly local hostnames for app repos.
 
+[![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
+[![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
+
 Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `https://app.localhost/` instead of remembering which localhost port belongs to which process.
 
 [Website](https://hamedb89.github.io/localghost/) · [npm](https://www.npmjs.com/package/@hamedb89/localghost) · [GitHub](https://github.com/hamedb89/localghost)
@@ -19,6 +22,14 @@ Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives 
 - Checks whether Caddy is installed, but does not run Homebrew for you.
 - Provides a Vite plugin that sets explicit `server.allowedHosts` entries.
 - Prints parsed config and project-local state as JSON for scripts, Codex, agents, and future MCP tools.
+
+## Trust
+
+- CI runs typecheck, build, site build, and npm package dry-run on Node 20 and 22.
+- GitHub Pages is deployed by Actions from the checked-in `site/` and `assets/` sources.
+- npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
+- Runtime dependencies are intentionally small: `commander` for the CLI and `execa` for process execution. Vite is an optional peer dependency for the Vite plugin.
+- No postinstall scripts, hidden Homebrew installs, or broad hosts-file rewrites.
 
 <p align="center">
   <img src="./assets/localghost-app-icon.png" alt="Localghost app icon" width="180">

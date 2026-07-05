@@ -109,3 +109,21 @@ Recommended repo homepage:
 ```txt
 https://hamedb89.github.io/localghost/
 ```
+
+## CI And Publishing
+
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main`. It uses `npm ci`, then runs:
+
+```sh
+npm run release:check
+```
+
+That command typechecks, builds the package, builds the static site, and runs `npm pack --dry-run`.
+
+`.github/workflows/publish-npm.yml` publishes to npm from a published GitHub release or manual workflow dispatch. The workflow reruns `npm run release:check` before publishing and uses:
+
+```sh
+npm publish --access public --provenance
+```
+
+Configure npm trusted publishing for `hamedb89/localghost` before relying on the release workflow. Local manual publishes are guarded by the `prepublishOnly` package hook, which runs the same release check.

@@ -192,6 +192,7 @@
 
       .card h3 { margin: 0 0 10px; font-size: 18px; }
       .card p { margin: 0; color: var(--muted); line-height: 1.55; }
+      .card a { color: var(--violet); font-weight: 800; }
 
       .mascot {
         width: min(360px, 80%);
@@ -273,6 +274,25 @@ yarn localghost:proxy</pre>
             <article class="card">
               <h3>Vite-safe defaults</h3>
               <p>Set explicit `server.allowedHosts` entries without opening the broad `allowedHosts: true` shortcut.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="wrap">
+          <h2>Built to be boring where it matters</h2>
+          <div class="grid">
+            <article class="card">
+              <h3>CI before publish</h3>
+              <p><a href="https://github.com/hamedb89/localghost/actions/workflows/ci.yml">GitHub Actions</a> runs typecheck, build, site build, and npm package dry-run on Node 20 and 22.</p>
+            </article>
+            <article class="card">
+              <h3>Small dependency surface</h3>
+              <p>Runtime dependencies are limited to `commander` and `execa`. Vite stays an optional peer for projects that use the plugin.</p>
+            </article>
+            <article class="card">
+              <h3>No surprise installs</h3>
+              <p>No postinstall scripts, hidden Homebrew commands, or full hosts-file rewrites. Localghost changes only its managed block.</p>
             </article>
           </div>
         </div>

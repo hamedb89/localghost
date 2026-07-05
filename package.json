@@ -44,9 +44,11 @@
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "prepack": "npm run build",
+    "prepublishOnly": "npm run release:check",
     "pack:dry": "npm pack --dry-run",
-    "release:check": "npm run typecheck && npm run build && npm pack --dry-run",
-    "site:build": "node scripts/build-site.mjs"
+    "release:check": "npm run typecheck && npm run build && npm run site:build && npm pack --dry-run",
+    "site:build": "node scripts/build-site.mjs",
+    "publish:public": "npm publish --access public --provenance"
   },
   "dependencies": {
     "commander": "^14.0.0",
