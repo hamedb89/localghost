@@ -8,6 +8,7 @@ Buh. Friendly local hostnames for app repos.
 
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
+[![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
 [![npm version](https://img.shields.io/npm/v/@hamedb89/localghost.svg)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for local HTTPS domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `https://app.localhost/` instead of remembering which localhost port belongs to which process.

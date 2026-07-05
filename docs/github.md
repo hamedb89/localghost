@@ -123,7 +123,41 @@ That command typechecks, builds the package, builds the static site, and runs `n
 `.github/workflows/publish-npm.yml` publishes to npm from a published GitHub release or manual workflow dispatch. The workflow reruns `npm run release:check` before publishing and uses:
 
 ```sh
-npm publish --access public --provenance
+npm publish --access public
 ```
 
-Configure npm trusted publishing for `hamedb89/localghost` before relying on the release workflow. Local manual publishes are guarded by the `prepublishOnly` package hook, which runs the same release check.
+Configure npm trusted publishing for `hamedb89/localghost` before relying on the release workflow. On npmjs.com, open the package settings and add a trusted publisher with:
+
+```txt
+Provider: GitHub Actions
+Organization or user: hamedb89
+Repository: localghost
+Workflow filename: publish-npm.yml
+Environment name: npm
+Allowed actions: npm publish
+```
+
+The workflow must keep `id-token: write`, run on a GitHub-hosted runner, and use a recent npm CLI. Trusted publishing does not need an `NPM_TOKEN` secret. npm automatically generates provenance for public packages published from public GitHub repositories through trusted publishing.
+
+Local manual publishes are guarded by the `prepublishOnly` package hook, which runs the same release check.
+
+## Patch Release Workflow
+
+Use patch releases for docs, packaging metadata, small fixes, and backwards-compatible CLI/API changes. Do not overwrite a published npm version; npm package versions are immutable, and git tags should continue to identify the source that produced that published package.
+
+For a normal patch release:
+
+```sh
+git status --short
+npm run release:check
+npm version patch
+git push origin main --tags
+```
+
+Then create a GitHub release for the new tag, or run the `Publish npm` workflow manually for that tag. The npm publish workflow reruns `npm run release:check` before publishing.
+
+If publishing from a local terminal instead of GitHub Actions, omit provenance and provide the npm two-factor code:
+
+```sh
+npm publish --access public --otp=123456
+```

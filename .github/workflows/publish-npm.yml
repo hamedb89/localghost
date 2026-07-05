@@ -24,19 +24,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.14.0
           registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Enable package manager
-        run: corepack enable
+      - name: Use npm with trusted publishing support
+        run: npm install -g npm@latest
 
       - name: Install dependencies
-        run: corepack npm ci
+        run: npm ci
 
       - name: Verify package and site
-        run: corepack npm run release:check
+        run: npm run release:check
 
       - name: Publish to npm
-        run: corepack npm publish --access public --provenance
+        run: npm publish --access public
