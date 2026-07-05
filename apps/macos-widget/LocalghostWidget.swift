@@ -209,23 +209,36 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private func showDesktopWidget() {
         if desktopPanel == nil {
-            let view = LocalghostDesktopWidgetView(frame: NSRect(x: 0, y: 0, width: 360, height: 330))
+            let widgetFrame = NSRect(x: 0, y: 0, width: 360, height: 330)
+            let glassView = NSVisualEffectView(frame: widgetFrame)
+            glassView.material = .hudWindow
+            glassView.blendingMode = .behindWindow
+            glassView.state = .active
+            glassView.wantsLayer = true
+            glassView.layer?.cornerRadius = 34
+            glassView.layer?.masksToBounds = true
+
+            let view = LocalghostDesktopWidgetView(frame: widgetFrame)
+            view.autoresizingMask = [.width, .height]
+            view.wantsLayer = true
+            view.layer?.backgroundColor = NSColor.clear.cgColor
             view.update(runs: latestRuns, errorMessage: latestError)
             view.openFirstRoute = { [weak self] in
                 self?.openFirstRoute()
             }
+            glassView.addSubview(view)
 
             let panel = NSPanel(
-                contentRect: view.bounds,
+                contentRect: widgetFrame,
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
-            panel.contentView = view
+            panel.contentView = glassView
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
-            panel.level = .floating
+            panel.level = .normal
             panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
             panel.hidesOnDeactivate = false
@@ -419,15 +432,25 @@ final class LocalghostDesktopWidgetView: NSView {
     private func drawBackground() {
         let rect = bounds.insetBy(dx: 4, dy: 4)
         let path = NSBezierPath(roundedRect: rect, xRadius: 34, yRadius: 34)
+
+        NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.24, alpha: 0.34).setFill()
+        path.fill()
+
         let gradient = NSGradient(colors: [
-            NSColor(calibratedRed: 0.04, green: 0.05, blue: 0.18, alpha: 0.98),
-            NSColor(calibratedRed: 0.07, green: 0.08, blue: 0.30, alpha: 0.97)
+            NSColor(calibratedRed: 0.72, green: 0.66, blue: 1.0, alpha: 0.18),
+            NSColor(calibratedRed: 0.05, green: 0.08, blue: 0.28, alpha: 0.08),
+            NSColor(calibratedRed: 0.01, green: 0.02, blue: 0.09, alpha: 0.22)
         ])
         gradient?.draw(in: path, angle: -35)
 
-        NSColor(calibratedWhite: 1.0, alpha: 0.08).setStroke()
+        NSColor(calibratedWhite: 1.0, alpha: 0.24).setStroke()
         path.lineWidth = 1
         path.stroke()
+
+        let innerPath = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 33, yRadius: 33)
+        NSColor(calibratedWhite: 0.0, alpha: 0.12).setStroke()
+        innerPath.lineWidth = 1
+        innerPath.stroke()
     }
 
     private func drawHeader() {
