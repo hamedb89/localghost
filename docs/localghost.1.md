@@ -15,6 +15,7 @@ localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost update [--json]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup]
+localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--dynamic-port] -- command
 localghost print [--config file] [--config-pattern regex]
 ```
 
@@ -113,6 +114,17 @@ Requires setup to be ready, writes `ops/local/Caddyfile`, validates it, and runs
 ```sh
 localghost dev
 ```
+
+### run
+
+Resolves one Localghost context, ensures setup is ready, writes the runtime Caddyfile, starts Caddy, and runs a child dev command. The selected port is passed to the child as `LOCALGHOST_PORT` and `VITE_PORT`.
+
+```sh
+localghost run -- vite
+localghost run --dynamic-port -- turbo dev
+```
+
+Pass `--dynamic-port` or `--dynamic-port=yes` to start at the configured port and walk upward until `127.0.0.1:<port>` is free. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
 
 ### print
 

@@ -3,15 +3,18 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
-import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, runCaddy } from "./caddy.js";
+import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, runCaddy, startCaddy } from "./caddy.js";
+import { resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts } from "./parse.js";
+import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes } from "./routes.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
+import { execa } from "execa";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   const localHosts = findLocalMdnsHosts(entries);
@@ -43,6 +46,15 @@ function parsePackageManager(value: string): PackageManager {
 
 function collect(value: string, previous: string[] = []) {
   return [...previous, value];
+}
+
+function parseBooleanLike(value: string | boolean) {
+  if (value === true) return true;
+  if (value === false) return false;
+  const normalized = value.toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  throw new InvalidArgumentError("Value must be yes or no.");
 }
 
 type ConfigCliOptions = {
@@ -92,7 +104,7 @@ function getSetupCommand(options: { https?: boolean; config?: string[]; configPa
   return `localghost setup${configFlags}${options.https ? " --https" : ""}`;
 }
 
-function getSetupReadiness(options: ConfigCliOptions & { project?: string; https?: boolean }) {
+function getSetupReadiness(options: ConfigCliOptions & { project?: string; https?: boolean; ignoreCaddyfile?: boolean }) {
   const projectName = sanitizeProjectName(options.project ?? getProjectName(options.cwd));
   const readOptions = readOptionsFromCli(options);
   const entries = readDevHosts(readOptions);
@@ -123,13 +135,15 @@ function getSetupReadiness(options: ConfigCliOptions & { project?: string; https
     reasons.push(`Could not read ${hostsPath}: ${message}`);
   }
 
-  if (!existsSync(caddyfilePath)) {
-    reasons.push(`Missing Caddyfile at ${caddyfilePath}.`);
-  } else {
-    const expectedCaddyfile = renderCaddyfile(entries, { https });
-    const currentCaddyfile = readFileSync(caddyfilePath, "utf8");
-    if (currentCaddyfile !== expectedCaddyfile) {
-      reasons.push(`Caddyfile at ${caddyfilePath} is stale for ${https ? "HTTPS" : "HTTP"} mode.`);
+  if (!options.ignoreCaddyfile) {
+    if (!existsSync(caddyfilePath)) {
+      reasons.push(`Missing Caddyfile at ${caddyfilePath}.`);
+    } else {
+      const expectedCaddyfile = renderCaddyfile(entries, { https });
+      const currentCaddyfile = readFileSync(caddyfilePath, "utf8");
+      if (currentCaddyfile !== expectedCaddyfile) {
+        reasons.push(`Caddyfile at ${caddyfilePath} is stale for ${https ? "HTTPS" : "HTTP"} mode.`);
+      }
     }
   }
 
@@ -143,6 +157,29 @@ function getSetupReadiness(options: ConfigCliOptions & { project?: string; https
     statePath,
     setupCommand: getSetupCommand(options)
   };
+}
+
+async function runSetupFromReadiness(
+  cwd: string,
+  https: boolean,
+  readiness: ReturnType<typeof getSetupReadiness>
+) {
+  explainHostsPassword();
+  const hostsResult = await updateSystemHosts(readiness.projectName, readiness.entries);
+  const caddyfilePath = await writeCaddyfile(readiness.entries, cwd, { https });
+  await validateCaddyfile(caddyfilePath);
+  writeLocalghostState(cwd, {
+    action: "setup",
+    projectName: readiness.projectName,
+    cwd,
+    configPath: readiness.configPath,
+    hostsPath: hostsResult.hostsPath,
+    hostsChanged: hostsResult.changed,
+    ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
+    caddyfilePath,
+    caddyHttps: https,
+    entries: readiness.entries
+  });
 }
 
 const program = new Command();
@@ -506,6 +543,99 @@ program
     const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
     await runCaddy(caddyfile);
+  });
+
+program
+  .command("run")
+  .description("Run Caddy and a dev command from the same Localghost context")
+  .option("--project <name>", "Managed /etc/hosts block name")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--port <number>", "Initial app port", parsePort)
+  .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
+  .option("--ssl", "Alias for --https")
+  .option("--setup", "Run setup before starting when setup is missing or stale")
+  .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike, false)
+  .argument("<command...>", "Command to run after --, for example: localghost run -- vite")
+  .action(async (
+    command: string[],
+    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions
+  ) => {
+    assertLocalDevelopment("run");
+    await assertCaddyReady();
+
+    const https = useHttps(options);
+    const context = await resolveLocalghostContext({
+      cwd: options.cwd,
+      ...(options.project ? { project: options.project } : {}),
+      ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
+      ...(options.configPattern ? { configPattern: options.configPattern } : {}),
+      ...(options.port ? { port: options.port } : {}),
+      https,
+      ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {})
+    });
+    const readiness = getSetupReadiness({ ...options, https, ignoreCaddyfile: true });
+
+    if (!readiness.ready) {
+      const shouldSetup = options.setup === true || (canPrompt() && await confirm("Run caddy:setup now?", true));
+      if (!shouldSetup) {
+        throw new Error(
+          [
+            "Localghost setup is missing or stale.",
+            ...readiness.reasons.map((reason) => `- ${reason}`),
+            `Run: ${readiness.setupCommand}`
+          ].join("\n")
+        );
+      }
+
+      await runSetupFromReadiness(options.cwd, https, readiness);
+      console.log(`All set. Setup state: ${getLocalghostStatePath(options.cwd)}`);
+    }
+
+    if (context.dynamicPort && context.port !== context.requestedPort) {
+      console.log(`Port ${context.requestedPort} is busy; using ${context.port}.`);
+    }
+
+    warnAboutLocalMdns(context.entries);
+    logDomainRoutes(context.entries, { https });
+
+    const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https });
+    await validateCaddyfile(caddyfile);
+    const caddy = startCaddy(caddyfile);
+    const caddyExit = caddy.catch((error: unknown) => {
+      if (!caddy.killed) throw error;
+    });
+    const [binary, ...args] = command;
+    if (!binary) {
+      throw new Error("Missing command. Use: localghost run -- vite");
+    }
+
+    const child = execa(binary, args, {
+      cwd: options.cwd,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        LOCALGHOST_PORT: String(context.port),
+        LOCALGHOST_DYNAMIC_PORT: context.dynamicPort ? "1" : "0",
+        VITE_PORT: String(context.port)
+      }
+    });
+
+    const stopCaddy = () => {
+      if (!caddy.killed) caddy.kill("SIGINT");
+    };
+    const stopChild = () => {
+      if (!child.killed) child.kill("SIGINT");
+    };
+
+    try {
+      await Promise.race([child, caddyExit]);
+    } finally {
+      stopChild();
+      stopCaddy();
+      await Promise.allSettled([child, caddyExit]);
+    }
   });
 
 program

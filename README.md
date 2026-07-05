@@ -9,7 +9,7 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.4-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/badge/npm-v0.1.5-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for friendly local domains in app repos. It gives each project one small contract for `.localhost` hostnames, Caddy reverse proxies, Vite `allowedHosts`, and the system hosts file, so developers can open `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 
@@ -144,6 +144,7 @@ The Vite plugin accepts the same shape through `fileName`, `configFiles`, or `co
     "localghost:setup": "localghost setup",
     "localghost:proxy": "localghost dev",
     "localghost:proxy:https": "localghost dev --https",
+    "localghost:run": "localghost run --",
     "localghost:ready": "localghost status --ready",
     "localghost:print": "localghost print",
     "localghost:routes": "localghost routes",
@@ -163,23 +164,35 @@ A full app might compose them with its own servers:
 ```json
 {
   "scripts": {
-    "dev:web": "vite --port 5173 --strictPort",
-    "dev:api": "wrangler dev --port 8787",
-    "dev:local": "concurrently -k \"npm run dev:web\" \"npm run dev:api\" \"npm run localghost:proxy\""
+    "dev": "localghost run -- vite",
+    "dev:dynamic": "localghost run --dynamic-port -- vite",
+    "dev:raw": "vite"
   }
 }
 ```
 
-In Turborepo, keep Localghost as a persistent uncached task:
+In Turborepo, let Localghost wrap the dev runner and keep dev uncached:
+
+```json
+{
+  "scripts": {
+    "dev": "localghost run --dynamic-port -- turbo dev",
+    "dev:raw": "turbo dev"
+  }
+}
+```
+
+Then keep persistent dev tasks uncached:
 
 ```json
 {
   "tasks": {
-    "dev": { "cache": false, "persistent": true },
-    "localghost:proxy": { "cache": false, "persistent": true }
+    "dev": { "cache": false, "persistent": true }
   }
 }
 ```
+
+`localghost run` resolves one shared Localghost context, starts Caddy, passes the selected port to the child command through `LOCALGHOST_PORT` and `VITE_PORT`, and stops Caddy when the child exits. With `--dynamic-port`, Localghost starts at the configured port, checks `127.0.0.1:<port>`, and walks upward until it finds a free port.
 
 ## Vite
 
@@ -191,13 +204,14 @@ export default defineConfig({
   plugins: [
     localGhostPlugin({
       port: 5173,
+      dynamicPort: true,
       configFiles: [".localghost.private", ".localghost"]
     })
   ]
 });
 ```
 
-The plugin sets Vite's dev host to the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops.
+The plugin binds Vite to `127.0.0.1` by default, prints the selected Localghost domain, generates an explicit `server.allowedHosts` list from the selected config file, and does not set `allowedHosts: true`. It runs only during local `vite serve`; production/build mode no-ops. When `dynamicPort` is enabled, the plugin uses the configured port when available and otherwise moves to the next free port before Vite starts.
 
 If `.localghost` is missing and Vite is running in an interactive terminal, the plugin asks whether to create one, prompts for the primary domain and optional extra domains, and then asks whether to run setup. Before touching `/etc/hosts`, it explains why macOS may ask for your password and confirms that only Localghost's managed block is changed.
 
@@ -231,6 +245,8 @@ localghost teardown
 localghost teardown --remove-caddyfile
 localghost update
 localghost --no-update-check doctor
+localghost run -- vite
+localghost run --dynamic-port -- turbo dev
 localghost dev --config-pattern '^\.localghost\.'
 localghost dev --https
 localghost print

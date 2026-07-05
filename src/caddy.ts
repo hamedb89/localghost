@@ -70,3 +70,10 @@ export async function runCaddy(path: string) {
     stdio: "inherit"
   });
 }
+
+export function startCaddy(path: string) {
+  return execa("caddy", ["run", "--config", path], {
+    cwd: dirname(path),
+    stdio: "inherit"
+  });
+}
