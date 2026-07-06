@@ -88,7 +88,8 @@ function printLocalHosts(server: ViteDevServer, context: LocalghostContext | und
       color: shouldColor(),
       label: "ready",
       verbose: optionsVerbose(context)
-    }) : undefined
+    }) : undefined,
+    process.stdin.isTTY && context.ghostTunnel.enabled ? "  help:   press h + enter for Vite, g + enter for Localghost" : undefined
   ].filter((line): line is string => Boolean(line));
 
   server.config.logger.info(lines.join("\n"), {

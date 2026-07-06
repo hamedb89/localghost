@@ -125,6 +125,7 @@ test("Vite build hook logs configured Ghost Tunnel without local setup", async (
   await writeFile(join(cwd, "localghost.config.mjs"), [
     "export default {",
     "  ghostTunnel: {",
+    "    mode: 'public',",
     "    domains: 'decisionlayer.com'",
     "  }",
     "};",
@@ -154,5 +155,88 @@ test("Vite build hook logs configured Ghost Tunnel without local setup", async (
 
   const output = logs.join("\n");
   assert.match(output, /localghost ghost tunnel/);
-  assert.match(output, /configured: https:\/\/decisionlayer-decision-layer-tester\.ghost\.decisionlayer\.com\//);
+  assert.match(output, /configured: https:\/\/<route>-<project>-<owner>\.ghost\.decisionlayer\.com\//);
+});
+
+test("Vite serve hook logs interactive help for Localghost shortcut", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-vite-serve-"));
+  await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "decision-layer" }, null, 2));
+  await writeFile(join(cwd, ".localghost"), "decisionlayer.test 5173\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), [
+    "export default {",
+    "  ghostTunnel: {",
+    "    mode: 'public',",
+    "    domains: 'copper-comet.example'",
+    "  }",
+    "};",
+    ""
+  ].join("\n"));
+
+  const previousOwner = process.env.LOCALGHOST_OWNER;
+  const previousActivityPath = process.env.LOCALGHOST_ACTIVITY_PATH;
+  const previousStdinIsTty = process.stdin.isTTY;
+  process.env.LOCALGHOST_OWNER = "hamedbahrami";
+  process.env.LOCALGHOST_ACTIVITY_PATH = join(cwd, "activity.json");
+  Object.defineProperty(process.stdin, "isTTY", {
+    configurable: true,
+    value: true
+  });
+
+  const { localGhostPlugin } = await import(new URL("../dist/vite.js", import.meta.url));
+  const plugin = localGhostPlugin({ cwd, setup: false, dynamicPort: false });
+  const logs = [];
+  let closeServer;
+  const server = {
+    watcher: {
+      add() {},
+      on() {}
+    },
+    config: {
+      logger: {
+        info(message) {
+          logs.push(String(message));
+        },
+        error(message) {
+          logs.push(String(message));
+        }
+      }
+    },
+    httpServer: {
+      once(event, callback) {
+        if (event === "close") closeServer = callback;
+      }
+    },
+    restart: async () => {}
+  };
+
+  try {
+    await plugin.config({}, { command: "serve", mode: "development" });
+    plugin.configureServer(server);
+    server.printUrls();
+  } finally {
+    closeServer?.();
+    process.stdin.pause();
+
+    if (typeof previousOwner === "undefined") {
+      delete process.env.LOCALGHOST_OWNER;
+    } else {
+      process.env.LOCALGHOST_OWNER = previousOwner;
+    }
+
+    if (typeof previousActivityPath === "undefined") {
+      delete process.env.LOCALGHOST_ACTIVITY_PATH;
+    } else {
+      process.env.LOCALGHOST_ACTIVITY_PATH = previousActivityPath;
+    }
+
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: previousStdinIsTty
+    });
+  }
+
+  const output = logs.join("\n");
+  assert.match(output, /localghost/);
+  assert.match(output, /ready: https:\/\/<route>-<project>-<owner>\.ghost\.copper-comet\.example\//);
+  assert.match(output, /help:   press h \+ enter for Vite, g \+ enter for Localghost/);
 });

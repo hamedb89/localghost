@@ -154,7 +154,7 @@ When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, 
 
 Relay helpers are private by default. Registration requires an authenticated local-agent bearer token plus an exact signed route claim. Targets must be explicit local host/port objects, dangerous ports are blocked, private/LAN targets require explicit opt-in, internal and hop-by-hop headers are stripped, sensitive logs are redacted, and offline agents get a safe 503 page.
 
-When `ghostTunnel` is configured, route output and Vite startup logs print local defaults for `route`, `project`, and `owner`. Add `ghostTunnel.domains` to fill one or more production base domains. When `ghostTunnel.preview` is configured with `route`, `project`, and `owner`, they print the concrete URL, inheriting `ghostTunnel.domains` unless `preview.domain` is set. In an interactive Vite terminal, press `g` to show Ghost Tunnel configuration and open a numbered concrete URL.
+When `ghostTunnel` is configured, route output and Vite startup logs print the production URL shape. Manual mode can fill local defaults for `route`, `project`, and `owner`; public mode leaves those slots as `<route>`, `<project>`, and `<owner>` unless `ghostTunnel.preview` pins a concrete URL. Add `ghostTunnel.domains` to fill one or more production base domains. When `ghostTunnel.preview` is configured with `route`, `project`, and `owner`, logs print the concrete URL, inheriting `ghostTunnel.domains` unless `preview.domain` is set. In an interactive Vite terminal, press `g` to show Ghost Tunnel configuration and open a numbered concrete URL.
 
 `dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 

@@ -231,12 +231,42 @@ test("supports manual/public mode and configured domains", () => {
   assert.equal(config.mode, "public");
   assert.deepEqual(config.domains, ["moonlit-otter.example", "staging.moonlit-otter.example"]);
   assert.deepEqual(getGhostTunnelDisplayUrls(config), [
-    "https://plan-summer-base-hamed.ghost.moonlit-otter.example/",
-    "https://plan-summer-base-hamed.ghost.staging.moonlit-otter.example/"
+    "https://<route>-<project>-<owner>.ghost.moonlit-otter.example/",
+    "https://<route>-<project>-<owner>.ghost.staging.moonlit-otter.example/"
   ]);
 
   assert.equal(resolveGhostTunnelConfig("manual").mode, "manual");
   assert.equal(resolveGhostTunnelConfig("public").mode, "public");
+});
+
+test("keeps public Ghost Tunnel display flexible unless preview is pinned", () => {
+  const flexible = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example"
+  }, {
+    route: "decisionlayer",
+    project: "decision-layer",
+    owner: "local"
+  });
+
+  assert.equal(flexible.displayUrl, "https://<route>-<project>-<owner>.ghost.copper-comet.example/");
+
+  const preview = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example",
+    preview: {
+      route: "decisionlayer",
+      project: "decision-layer",
+      owner: "hamedbahrami"
+    }
+  }, {
+    domain: "copper-comet.example",
+    route: "local",
+    project: "local",
+    owner: "local"
+  });
+
+  assert.equal(preview.displayUrl, "https://decisionlayer-decision-layer-hamedbahrami.ghost.copper-comet.example/");
 });
 
 test("keeps disabled Ghost Tunnel domains without displaying routes", () => {

@@ -25,7 +25,7 @@ export default defineLocalghostConfig({
 });
 ```
 
-With `ghostTunnel: { domains }`, route output and Vite startup output use local defaults for `route`, `project`, and `owner`, then fill the configured domain:
+With `ghostTunnel: { domains }` in the default manual mode, route output and Vite startup output use local defaults for `route`, `project`, and `owner`, then fill the configured domain:
 
 ```txt
 localghost ghost tunnel
@@ -42,6 +42,14 @@ localghost ghost tunnel
 ```
 
 `manual` is the default activation mode. `ghostTunnel: "manual"` and `ghostTunnel: "public"` are shorthand modes. Use `enabled: false` to keep domains/config in the file without exposing the tunnel surface.
+
+Public mode keeps the namespace flexible unless you configure a preview. This is useful for deployed wildcard endpoints that react to whichever route arrives:
+
+```txt
+localghost ghost tunnel
+  mode: public
+  configured: https://<route>-<project>-<owner>.ghost.moonlit-otter.example/
+```
 
 Use object form to override defaults or provide a concrete preview URL:
 

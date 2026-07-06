@@ -259,8 +259,12 @@ function getDisplayValues(input: ReturnType<typeof getPreviewDefaults>): GhostTu
   };
 }
 
+function getDisplayDefaults(config: GhostTunnelConfig, defaults?: GhostTunnelDisplayDefaults) {
+  return config.mode === "public" && !config.preview ? undefined : defaults;
+}
+
 function createDisplayUrl(config: GhostTunnelConfig, defaults?: GhostTunnelDisplayDefaults, domain?: string) {
-  const input = getPreviewDefaults(config.preview, defaults);
+  const input = getPreviewDefaults(config.preview, getDisplayDefaults(config, defaults));
   const protocol = input.protocol ?? "https";
   const slug = createNamespaceDisplaySlug(config.namespace, getDisplayValues(input));
   const entryHost = domain
@@ -275,14 +279,15 @@ function createDisplayUrl(config: GhostTunnelConfig, defaults?: GhostTunnelDispl
 }
 
 function createDisplayUrls(config: GhostTunnelConfig, defaults?: GhostTunnelDisplayDefaults) {
+  const displayDefaults = getDisplayDefaults(config, defaults);
   const domains = config.domains.length > 0
     ? config.domains
-    : defaults?.domain
-      ? [defaults.domain]
+    : displayDefaults?.domain
+      ? [displayDefaults.domain]
       : [];
   const urls = domains.length > 0
-    ? domains.map((domain) => createDisplayUrl(config, defaults, domain))
-    : [createDisplayUrl(config, defaults)];
+    ? domains.map((domain) => createDisplayUrl(config, displayDefaults, domain))
+    : [createDisplayUrl(config, displayDefaults)];
 
   return [...new Set(urls)];
 }
