@@ -21,7 +21,7 @@ export type GhostTunnelNamespaceValues = Record<string, string> & {
 };
 
 export type GhostTunnelPreviewOptions = {
-  domain: string;
+  domain?: string;
   route: string;
   project: string;
   owner: string;
@@ -47,6 +47,14 @@ export type GhostTunnelConfig = {
   displayUrl?: string;
   requireHttps: boolean;
   requireAuth: boolean;
+};
+
+export type GhostTunnelDisplayDefaults = {
+  domain?: string;
+  route?: string;
+  project?: string;
+  owner?: string;
+  values?: GhostTunnelNamespaceValues;
 };
 
 export type GhostTunnelRoute = {
@@ -188,8 +196,70 @@ function createNamespaceSlug(config: GhostTunnelNamespaceConfig, values: GhostTu
   return slug;
 }
 
-function createNamespaceTemplate(config: GhostTunnelNamespaceConfig) {
-  return config.tags.map((tag) => `<${tag}>`).join(config.separator);
+function createNamespaceDisplaySlug(config: GhostTunnelNamespaceConfig, values: GhostTunnelNamespaceValues = {}) {
+  return config.tags.map((tag) => {
+    const value = values[tag];
+    if (!value) return `<${tag}>`;
+
+    try {
+      return normalizeNamespaceValue(tag, value, config.separator, { allowSeparator: tag === config.spreadTag });
+    } catch {
+      return `<${tag}>`;
+    }
+  }).join(config.separator);
+}
+
+function getPreviewDefaults(preview: GhostTunnelPreviewOptions | undefined, defaults: GhostTunnelDisplayDefaults | undefined) {
+  return {
+    domain: preview?.domain ?? defaults?.domain,
+    route: preview?.route ?? defaults?.route,
+    project: preview?.project ?? defaults?.project,
+    owner: preview?.owner ?? defaults?.owner,
+    values: {
+      ...(defaults?.values ?? {}),
+      ...(preview?.values ?? {})
+    },
+    path: preview?.path,
+    protocol: preview?.protocol
+  };
+}
+
+function getDisplayValues(input: ReturnType<typeof getPreviewDefaults>): GhostTunnelNamespaceValues {
+  return {
+    ...(input.route ? { route: input.route } : {}),
+    ...(input.project ? { project: input.project } : {}),
+    ...(input.owner ? { owner: input.owner } : {}),
+    ...input.values
+  };
+}
+
+function createDisplayUrl(config: GhostTunnelConfig, defaults?: GhostTunnelDisplayDefaults) {
+  const input = getPreviewDefaults(config.preview, defaults);
+  const protocol = input.protocol ?? "https";
+  const slug = createNamespaceDisplaySlug(config.namespace, getDisplayValues(input));
+  const entryHost = input.domain ? getGhostTunnelEntryHost(input.domain, config) : `${config.subdomain}.<domain>`;
+  const url = `${protocol}://${slug}.${entryHost}/`;
+
+  if (!input.path) return url;
+  return `${url}${input.path.replace(/^\/+/, "")}`;
+}
+
+function maybeConstructPreviewUrl(config: GhostTunnelConfig, defaults?: GhostTunnelDisplayDefaults) {
+  if (!config.preview) return undefined;
+
+  const input = getPreviewDefaults(config.preview, defaults);
+  if (!input.domain || !input.route || !input.project || !input.owner) return undefined;
+
+  return constructGhostTunnelUrl({
+    domain: input.domain,
+    route: input.route,
+    project: input.project,
+    owner: input.owner,
+    values: input.values,
+    ...(input.path ? { path: input.path } : {}),
+    ...(input.protocol ? { protocol: input.protocol } : {}),
+    ghostTunnel: config
+  });
 }
 
 function parseNamespaceSlug(slug: string, config: GhostTunnelNamespaceConfig): GhostTunnelNamespaceValues | null {
@@ -215,7 +285,7 @@ function parseNamespaceSlug(slug: string, config: GhostTunnelNamespaceConfig): G
   return namespace;
 }
 
-export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined): GhostTunnelConfig {
+export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined, defaults?: GhostTunnelDisplayDefaults): GhostTunnelConfig {
   if (!options) {
     return {
       enabled: false,
@@ -238,11 +308,11 @@ export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined
     requireHttps: config.requireHttps ?? true,
     requireAuth: config.requireAuth ?? true
   };
-  const previewUrl = config.preview ? constructGhostTunnelUrl({ ...config.preview, ghostTunnel: resolved }) : undefined;
+  const previewUrl = maybeConstructPreviewUrl(resolved, defaults);
 
   return {
     ...resolved,
-    displayUrl: previewUrl ?? `https://${createNamespaceTemplate(resolved.namespace)}.${resolved.subdomain}.<domain>/`,
+    displayUrl: previewUrl ?? createDisplayUrl(resolved, defaults),
     ...(previewUrl ? { previewUrl } : {})
   };
 }
@@ -302,22 +372,22 @@ export function constructGhostTunnelUrl(input: ConstructGhostTunnelUrlInput) {
 
 export const constructGhostTunnelURL = constructGhostTunnelUrl;
 
-export function getGhostTunnelDefaultDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig = true) {
+export function getGhostTunnelDefaultDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig = true, defaults?: GhostTunnelDisplayDefaults) {
   const config = toGhostTunnelConfig(options);
   if (!config.enabled) return null;
-  return `https://${createNamespaceTemplate(config.namespace)}.${config.subdomain}.<domain>/`;
+  return createDisplayUrl(config, defaults);
 }
 
-export function getGhostTunnelDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig | undefined) {
+export function getGhostTunnelDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig | undefined, defaults?: GhostTunnelDisplayDefaults) {
   const config = toGhostTunnelConfig(options);
   if (!config.enabled) return null;
-  return config.displayUrl ?? config.previewUrl ?? getGhostTunnelDefaultDisplayUrl(config);
+  return config.displayUrl ?? config.previewUrl ?? getGhostTunnelDefaultDisplayUrl(config, defaults);
 }
 
 export function getGhostTunnelPreviewUrl(options: GhostTunnelOptions | GhostTunnelConfig | undefined) {
   const config = toGhostTunnelConfig(options);
   if (!config.enabled) return null;
-  return config.previewUrl ?? (config.preview ? constructGhostTunnelUrl({ ...config.preview, ghostTunnel: config }) : null);
+  return config.previewUrl ?? maybeConstructPreviewUrl(config) ?? null;
 }
 
 export function parseGhostTunnelHost(host: string, domain: string, options: GhostTunnelOptions | GhostTunnelConfig = true): GhostTunnelRoute | null {

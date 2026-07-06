@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   getProjectName,
@@ -25,6 +26,7 @@ export type LocalghostContextOptions = {
   primaryHost?: string;
   dynamicPort?: boolean;
   wwwAlias?: boolean;
+  ghostTunnelDomain?: string;
   ghostTunnel?: GhostTunnelOptions;
 };
 
@@ -44,6 +46,7 @@ export type LocalghostContext = {
   primaryHost: string;
   https: boolean;
   wwwAlias: boolean;
+  ghostTunnelDomain?: string;
   ghostTunnel: GhostTunnelConfig;
   projectConfigPath?: string;
 };
@@ -81,6 +84,29 @@ function envHttps() {
   const value = process.env.LOCALGHOST_HTTPS;
   if (!value) return undefined;
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+function getPackageName(cwd: string) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as { name?: unknown };
+    return typeof pkg.name === "string" ? pkg.name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getPackageOwner(cwd: string) {
+  const packageName = getPackageName(cwd);
+  if (!packageName?.startsWith("@")) return undefined;
+  return packageName.slice(1).split("/")[0];
+}
+
+function getLocalOwner(cwd: string) {
+  return sanitizeProjectName(process.env.LOCALGHOST_OWNER ?? getPackageOwner(cwd) ?? process.env.USER ?? process.env.USERNAME ?? "local");
+}
+
+function getRouteName(primaryHost: string, fallback: string) {
+  return sanitizeProjectName(primaryHost.split(".")[0] ?? fallback);
 }
 
 function readOptionsFromContext(options: LocalghostContextOptions): ReadDevHostsOptions {
@@ -181,10 +207,18 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     entries.find((entry) => entry.port === port)?.host ??
     hosts[0] ??
     `${sanitizeProjectName(getProjectName(cwd))}.localhost`;
+  const projectName = sanitizeProjectName(merged.project ?? getProjectName(cwd));
+  const ghostTunnelDomain = merged.ghostTunnelDomain;
+  const ghostTunnel = resolveGhostTunnelConfig(merged.ghostTunnel, {
+    ...(ghostTunnelDomain ? { domain: ghostTunnelDomain } : {}),
+    route: getRouteName(primaryHost, projectName),
+    project: projectName,
+    owner: getLocalOwner(cwd)
+  });
 
   return {
     cwd,
-    projectName: sanitizeProjectName(merged.project ?? getProjectName(cwd)),
+    projectName,
     readOptions,
     configPath: resolvedPath.path,
     configFileName: resolvedPath.fileName,
@@ -198,7 +232,8 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     primaryHost,
     https: merged.https ?? envHttps() ?? false,
     wwwAlias,
-    ghostTunnel: resolveGhostTunnelConfig(merged.ghostTunnel),
+    ...(ghostTunnelDomain ? { ghostTunnelDomain } : {}),
+    ghostTunnel,
     ...(projectConfig.path ? { projectConfigPath: projectConfig.path } : {})
   };
 }

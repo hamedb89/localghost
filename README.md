@@ -277,15 +277,18 @@ Then the daily script can stay small:
 import { defineLocalghostConfig } from "@hamedb89/localghost";
 
 export default defineLocalghostConfig({
-  ghostTunnel: true
+  ghostTunnel: true,
+  ghostTunnelDomain: "moonlit-otter.example"
 });
 ```
 
-With `true`, local route and Vite startup logs show the default template:
+With `true`, local route and Vite startup logs use local defaults for `route`, `project`, and `owner`. If `ghostTunnelDomain` is set, the domain is filled too:
 
 ```txt
-ghostTunnel running on https://<route>-<project>-<owner>.ghost.<domain>/
+ghostTunnel running on https://app-decision-layer-hamed.ghost.moonlit-otter.example/
 ```
+
+Without `ghostTunnelDomain`, the log keeps the domain placeholder so you can see the expected shape.
 
 Use object form to override defaults or provide a concrete preview URL:
 
@@ -293,12 +296,12 @@ Use object form to override defaults or provide a concrete preview URL:
 export default defineLocalghostConfig({
   ghostTunnel: {
     preview: {
-      domain: "moonlit-otter.example",
       route: "plan",
       project: "summer-base",
       owner: "hamed"
     }
-  }
+  },
+  ghostTunnelDomain: "moonlit-otter.example"
 });
 ```
 

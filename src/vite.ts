@@ -35,6 +35,7 @@ export type LocalGhostPluginOptions = {
   setup?: boolean | "prompt";
   localghostConfig?: string | false;
   wwwAlias?: boolean;
+  ghostTunnelDomain?: string;
   ghostTunnel?: GhostTunnelOptions;
 };
 

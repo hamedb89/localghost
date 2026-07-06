@@ -111,6 +111,7 @@ export type {
 export type {
   ConstructGhostTunnelUrlInput,
   GhostTunnelConfig,
+  GhostTunnelDisplayDefaults,
   GhostTunnelNamespaceConfig,
   GhostTunnelNamespaceOptions,
   GhostTunnelNamespaceTag,

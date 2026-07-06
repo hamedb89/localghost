@@ -16,6 +16,7 @@ async function runCli(args) {
     cwd: new URL("..", import.meta.url),
     env: {
       ...process.env,
+      LOCALGHOST_OWNER: "tester",
       LOCALGHOST_UPDATE_CHECK_DISABLED: "1"
     }
   });
@@ -95,5 +96,22 @@ test("routes CLI logs default Ghost Tunnel template when enabled with true", asy
   const { stdout } = await runCli(["routes", "--cwd", cwd]);
 
   assert.match(stdout, /http:\/\/app\.localhost\//);
-  assert.match(stdout, /ghostTunnel running on https:\/\/<route>-<project>-<owner>\.ghost\.<domain>\//);
+  assert.match(stdout, /ghostTunnel running on https:\/\/app-app-tester\.ghost\.<domain>\//);
+});
+
+test("routes CLI fills the Ghost Tunnel domain when ghostTunnelDomain is configured", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-routes-domain-"));
+  await writeFile(join(cwd, ".localghost"), "app.localhost 5173\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), [
+    "export default {",
+    "  ghostTunnel: true,",
+    "  ghostTunnelDomain: 'moonlit-otter.example'",
+    "};",
+    ""
+  ].join("\n"));
+
+  const { stdout } = await runCli(["routes", "--cwd", cwd]);
+
+  assert.match(stdout, /http:\/\/app\.localhost\//);
+  assert.match(stdout, /ghostTunnel running on https:\/\/app-app-tester\.ghost\.moonlit-otter\.example\//);
 });

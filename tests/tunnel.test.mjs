@@ -193,6 +193,15 @@ test("logs default display templates when ghostTunnel is true or object-only", (
   assert.equal(defaults.displayUrl, "https://<route>-<project>-<owner>.ghost.<domain>/");
   assert.equal(getGhostTunnelDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
   assert.equal(getGhostTunnelDefaultDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
+  assert.equal(
+    resolveGhostTunnelConfig(true, {
+      domain: "moonlit-otter.example",
+      route: "app",
+      project: "decision-layer",
+      owner: "hamed"
+    }).displayUrl,
+    "https://app-decision-layer-hamed.ghost.moonlit-otter.example/"
+  );
 
   const custom = resolveGhostTunnelConfig({
     subdomain: "preview",
