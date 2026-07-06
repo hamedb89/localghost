@@ -58,6 +58,12 @@ struct LocalghostRoute: Decodable {
     let listening: Bool
 }
 
+struct LocalghostEndpointLogEntry {
+    let timestamp: Date
+    let message: String
+    let active: Bool
+}
+
 extension LocalghostRun {
     var isRunning: Bool {
         running ?? (pid != nil)
@@ -69,6 +75,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var latestRuns: [LocalghostRun] = []
     private var latestError: String?
+    private var endpointLog: [LocalghostEndpointLogEntry] = []
     private var desktopPanel: NSPanel?
     private var desktopView: LocalghostDesktopWidgetView?
 
@@ -96,16 +103,30 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let runs):
+                    self?.endpointLog = Self.updatedEndpointLog(
+                        previousRuns: self?.latestRuns ?? [],
+                        newRuns: runs,
+                        currentLog: self?.endpointLog ?? []
+                    )
                     self?.latestRuns = runs
                     self?.latestError = nil
                     Self.publishWidgetSnapshot(runs)
                 case .failure(let error):
+                    self?.endpointLog = Self.appendingEndpointLog(
+                        message: "Status read failed: \(error.localizedDescription)",
+                        active: false,
+                        to: self?.endpointLog ?? []
+                    )
                     self?.latestRuns = []
                     self?.latestError = error.localizedDescription
                 }
 
                 self?.updateStatusTitle()
-                self?.desktopView?.update(runs: self?.latestRuns ?? [], errorMessage: self?.latestError)
+                self?.desktopView?.update(
+                    runs: self?.latestRuns ?? [],
+                    errorMessage: self?.latestError,
+                    endpointLog: self?.endpointLog ?? []
+                )
                 self?.rebuildMenu()
             }
         }
@@ -149,6 +170,8 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
                 addRun(run, to: menu)
                 menu.addItem(.separator())
             }
+
+            addEndpointLog(to: menu)
         }
 
         let desktopTitle = desktopPanel?.isVisible == true ? "Hide Desktop Widget" : "Show Desktop Widget"
@@ -194,6 +217,23 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func addEndpointLog(to menu: NSMenu) {
+        guard !endpointLog.isEmpty else { return }
+
+        let title = NSMenuItem(title: "Endpoint log", action: nil, keyEquivalent: "")
+        title.isEnabled = false
+        menu.addItem(title)
+
+        for entry in endpointLog.prefix(4) {
+            let time = Self.logTimeFormatter.string(from: entry.timestamp)
+            let item = NSMenuItem(title: "  \(time)  \(entry.message)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+    }
+
     @objc private func refreshFromMenu() {
         refresh()
     }
@@ -210,7 +250,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private func showDesktopWidget() {
         if desktopPanel == nil {
-            let widgetFrame = NSRect(x: 0, y: 0, width: 380, height: 292)
+            let widgetFrame = NSRect(x: 0, y: 0, width: 380, height: 384)
             let glassView = NSVisualEffectView(frame: widgetFrame)
             glassView.material = .hudWindow
             glassView.blendingMode = .behindWindow
@@ -223,7 +263,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
             view.autoresizingMask = [.width, .height]
             view.wantsLayer = true
             view.layer?.backgroundColor = NSColor.clear.cgColor
-            view.update(runs: latestRuns, errorMessage: latestError)
+            view.update(runs: latestRuns, errorMessage: latestError, endpointLog: endpointLog)
             view.openFirstRoute = { [weak self] in
                 self?.openFirstRoute()
             }
@@ -362,6 +402,61 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         )
     }
 
+    private static func updatedEndpointLog(
+        previousRuns: [LocalghostRun],
+        newRuns: [LocalghostRun],
+        currentLog: [LocalghostEndpointLogEntry]
+    ) -> [LocalghostEndpointLogEntry] {
+        let previousRoutes = routeStates(from: previousRuns)
+        let newRoutes = routeStates(from: newRuns)
+        var log = currentLog
+
+        for key in newRoutes.keys.sorted() {
+            guard let route = newRoutes[key] else { continue }
+            let previous = previousRoutes[key]
+
+            if previous == nil {
+                log = appendingEndpointLog(
+                    message: "\(route.host) \(route.listening ? "connected" : "waiting") on \(route.target)",
+                    active: route.listening,
+                    to: log
+                )
+            } else if previous?.listening != route.listening {
+                log = appendingEndpointLog(
+                    message: "\(route.host) \(route.listening ? "connected" : "lost connection")",
+                    active: route.listening,
+                    to: log
+                )
+            }
+        }
+
+        for key in previousRoutes.keys.sorted() where newRoutes[key] == nil {
+            guard let route = previousRoutes[key] else { continue }
+            log = appendingEndpointLog(message: "\(route.host) stopped", active: false, to: log)
+        }
+
+        return Array(log.prefix(8))
+    }
+
+    private static func routeStates(from runs: [LocalghostRun]) -> [String: LocalghostRoute] {
+        var states: [String: LocalghostRoute] = [:]
+        for route in runs.flatMap(\.routes) {
+            states["\(route.host):\(route.port):\(route.target)"] = route
+        }
+        return states
+    }
+
+    private static func appendingEndpointLog(
+        message: String,
+        active: Bool,
+        to log: [LocalghostEndpointLogEntry]
+    ) -> [LocalghostEndpointLogEntry] {
+        let duplicate = log.first?.message == message && Date().timeIntervalSince(log.first?.timestamp ?? .distantPast) < 2
+        if duplicate { return log }
+
+        return [LocalghostEndpointLogEntry(timestamp: Date(), message: message, active: active)] + log
+    }
+
     private static func activityKey(projectName: String, cwd: String, configPath: String?) -> String {
         "\(projectName):\(cwd):\(configPath ?? "")"
     }
@@ -375,6 +470,12 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         let stateRoot = environment["XDG_STATE_HOME"] ?? "\(NSHomeDirectory())/.local/state"
         return "\(stateRoot)/localghost/activity.json"
     }
+
+    private static let logTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
 
     private static func isProcessRunning(_ pid: Int) -> Bool {
         if pid < 1 { return false }
@@ -409,12 +510,14 @@ final class LocalghostDesktopWidgetView: NSView {
     var openFirstRoute: (() -> Void)?
     private var runs: [LocalghostRun] = []
     private var errorMessage: String?
+    private var endpointLog: [LocalghostEndpointLogEntry] = []
 
     override var isFlipped: Bool { true }
 
-    func update(runs: [LocalghostRun], errorMessage: String?) {
+    func update(runs: [LocalghostRun], errorMessage: String?, endpointLog: [LocalghostEndpointLogEntry]) {
         self.runs = runs
         self.errorMessage = errorMessage
+        self.endpointLog = endpointLog
         needsDisplay = true
     }
 
@@ -424,6 +527,7 @@ final class LocalghostDesktopWidgetView: NSView {
         drawBackground()
         drawHeader()
         drawRoutes()
+        drawEndpointLog()
         drawFooter()
     }
 
@@ -447,7 +551,7 @@ final class LocalghostDesktopWidgetView: NSView {
     }
 
     private var footerRect: NSRect {
-        NSRect(x: 28, y: bounds.height - 50, width: bounds.width - 56, height: 28)
+        NSRect(x: 28, y: bounds.height - 36, width: bounds.width - 56, height: 24)
     }
 
     private func drawBackground() {
@@ -498,7 +602,7 @@ final class LocalghostDesktopWidgetView: NSView {
             return
         }
 
-        let routes = Array(allRoutes.prefix(4))
+        let routes = Array(allRoutes.prefix(3))
         if routes.isEmpty {
             drawEmptyState()
             return
@@ -507,12 +611,42 @@ final class LocalghostDesktopWidgetView: NSView {
         for (index, route) in routes.enumerated() {
             drawRoute(route, index: index)
         }
+
+        if allRoutes.count > routes.count {
+            drawText(
+                "+ \(allRoutes.count - routes.count) more",
+                at: NSPoint(x: 42, y: 256),
+                font: .systemFont(ofSize: 12, weight: .medium),
+                color: muted
+            )
+        }
     }
 
     private func drawFooter() {
         guard errorMessage == nil, let host = firstHost else { return }
-        drawText("↗", at: NSPoint(x: 30, y: bounds.height - 40), font: .systemFont(ofSize: 16, weight: .bold), color: accent)
-        drawText("Open \(host)", at: NSPoint(x: 56, y: bounds.height - 38), font: .systemFont(ofSize: 14, weight: .semibold), color: accent)
+        drawText("↗", at: NSPoint(x: 30, y: bounds.height - 28), font: .systemFont(ofSize: 16, weight: .bold), color: accent)
+        drawText("Open \(host)", at: NSPoint(x: 56, y: bounds.height - 26), font: .systemFont(ofSize: 14, weight: .semibold), color: accent)
+    }
+
+    private func drawEndpointLog() {
+        let titleY: CGFloat = 270
+        drawDivider(y: titleY - 12)
+        drawText("Endpoint log", at: NSPoint(x: 30, y: titleY), font: .systemFont(ofSize: 13, weight: .semibold), color: muted)
+
+        let entries = Array(endpointLog.prefix(2))
+        if entries.isEmpty {
+            drawText(
+                "Waiting for endpoint activity",
+                at: NSPoint(x: 30, y: titleY + 28),
+                font: .systemFont(ofSize: 13, weight: .medium),
+                color: muted
+            )
+            return
+        }
+
+        for (index, entry) in entries.enumerated() {
+            drawEndpointLogEntry(entry, y: titleY + 27 + CGFloat(index * 25))
+        }
     }
 
     private func drawEmptyState() {
@@ -528,6 +662,13 @@ final class LocalghostDesktopWidgetView: NSView {
         drawDot(at: NSPoint(x: row.minX + 16, y: row.midY), radius: 5, color: route.listening ? online : offline)
         drawText(route.host, at: NSPoint(x: row.minX + 32, y: row.minY + 7), font: .systemFont(ofSize: 14, weight: .semibold), color: .white)
         drawText(String(route.port), at: NSPoint(x: row.maxX - 54, y: row.minY + 7), font: .monospacedDigitSystemFont(ofSize: 14, weight: .medium), color: muted)
+    }
+
+    private func drawEndpointLogEntry(_ entry: LocalghostEndpointLogEntry, y: CGFloat) {
+        let row = NSRect(x: 30, y: y, width: bounds.width - 60, height: 22)
+        drawDot(at: NSPoint(x: row.minX + 8, y: row.midY), radius: 3, color: entry.active ? online : offline)
+        drawText(Self.logTimeFormatter.string(from: entry.timestamp), at: NSPoint(x: row.minX + 20, y: row.minY + 3), font: .monospacedDigitSystemFont(ofSize: 11, weight: .medium), color: muted)
+        drawText(entry.message, in: NSRect(x: row.minX + 78, y: row.minY + 2, width: row.width - 78, height: row.height), font: .systemFont(ofSize: 12, weight: .medium), color: .white)
     }
 
     private func drawGlassRow(_ rect: NSRect) {
@@ -586,6 +727,12 @@ final class LocalghostDesktopWidgetView: NSView {
         path.lineWidth = 1
         path.stroke()
     }
+
+    private static let logTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
 
     private func drawDot(at point: NSPoint, radius: CGFloat, color: NSColor) {
         color.setFill()

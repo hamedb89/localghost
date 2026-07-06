@@ -36,6 +36,23 @@ export {
 export { detectPackageManager, initLocalghost, packageAddCommand, packageRunCommand } from "./init.js";
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
+export {
+  assertExactRelayHost,
+  assertRelayLocalTarget,
+  authenticateRelayAgentToken,
+  createRelayRouteRegistration,
+  DEFAULT_RELAY_ALLOWED_TARGET_HOSTS,
+  DEFAULT_RELAY_BLOCKED_PORTS,
+  DEFAULT_RELAY_LIMITS,
+  DEFAULT_RELAY_TARGET_POLICY,
+  isRelayRouteActive,
+  redactRelayHeaders,
+  redactRelayLogUrl,
+  renderRelayOfflineResponse,
+  signRelayRouteClaim,
+  stripRelayForwardHeaders,
+  verifyRelayRouteClaim
+} from "./relay.js";
 export { formatDomainRoutes, getDomainRoutes } from "./routes.js";
 export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 export {
@@ -76,6 +93,18 @@ export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from ".
 export type { CaddyModeOptions } from "./caddy.js";
 export type { LocalghostContext, LocalghostContextOptions, LocalghostProjectConfig, LocalghostProjectConfigResult } from "./context.js";
 export type { DoctorResult } from "./doctor.js";
+export type {
+  ActiveRelayRoute,
+  RelayAccessMode,
+  RelayLimits,
+  RelayLocalTarget,
+  RelayOfflineResponse,
+  RelayProtocol,
+  RelayRouteClaim,
+  RelayRouteRegistrationInput,
+  RelayTargetPolicy,
+  SignedRelayRouteClaim
+} from "./relay.js";
 export type {
   ConstructGhostTunnelUrlInput,
   GhostTunnelConfig,

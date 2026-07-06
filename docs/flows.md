@@ -129,6 +129,8 @@ export default defineLocalghostConfig({
 
 The production flow is DNS wildcard -> `constructGhostTunnelUrl` -> deployed app -> app auth -> `assertSecureGhostTunnelRequest`. By default the helper constructs and parses `route`, `project`, and `owner` from the wildcard label before `ghost.<domain>`, requires HTTPS, and requires the app to pass `authenticated: true`. See [Ghost Tunnel](./ghost-tunnel.md).
 
+Relay registration is local-agent-only: signed exact-host claims, explicit local targets, private access by default, no arbitrary URL proxy endpoint, and safe offline behavior when the agent disconnects.
+
 ## Reset For Testing
 
 As a developer, I want to retest setup without deleting my project config.

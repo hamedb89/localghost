@@ -152,6 +152,8 @@ When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, 
 
 `ghostTunnel: true` does not change local Caddy or `/etc/hosts` setup. It marks `<route>-<project>-<owner>.ghost.<domain>` as a production app entrypoint. Production code can call `readLocalghostProjectConfig()`, `constructGhostTunnelUrl()`, and `assertSecureGhostTunnelRequest()` to read the flag, construct default tunnel URLs, validate the wildcard host shape, require HTTPS by default, and require an app-authenticated request by default.
 
+Relay helpers are private by default. Registration requires an authenticated local-agent bearer token plus an exact signed route claim. Targets must be explicit local host/port objects, dangerous ports are blocked, private/LAN targets require explicit opt-in, internal and hop-by-hop headers are stripped, sensitive logs are redacted, and offline agents get a safe 503 page.
+
 `dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 
 ### print

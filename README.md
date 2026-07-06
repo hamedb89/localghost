@@ -310,6 +310,16 @@ const route = assertSecureGhostTunnelRequest({
 
 That constructs `https://plan-summer-base-hamed.ghost.moonlit-otter.example/`, validates the same host shape, requires HTTPS by default, and requires the app to confirm auth by default. See [Ghost Tunnel](./docs/ghost-tunnel.md) for the production DNS and routing flow.
 
+Relay guardrails are private-by-default: public requests never choose the local target, route registration requires a matching local-agent bearer token, signed route claims are exact/scoped/expiring, and default targets are limited to `localhost`, `127.0.0.1`, and `::1` with dangerous ports blocked. The package exports relay helpers for registration, target validation, header stripping, log redaction, limits, and safe offline responses.
+
+Local security checks:
+
+```sh
+npm test
+npm run test:cli
+npm run test:coverage
+```
+
 `localghost dev` and `localghost run` also register their active sessions in a user-local activity file. Use `localghost ps` to see the Localghost apps currently running on the machine:
 
 ```txt

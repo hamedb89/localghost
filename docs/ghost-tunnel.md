@@ -125,6 +125,63 @@ constructGhostTunnelUrl({
 - Auth is required by default. `assertSecureGhostTunnelRequest` rejects the request unless the app passes `authenticated: true`.
 - Local Caddy and `/etc/hosts` setup do not manage Ghost Tunnel. They stay local-development-only.
 
+## Relay Security
+
+Localghost relay is private by default. Public requests can select a Ghost Tunnel route, but they must never select the local target URL, hostname, IP, or port. There must be no `/proxy?url=...` style endpoint.
+
+Route registration goes through an authenticated local agent:
+
+```ts
+import {
+  createRelayRouteRegistration,
+  signRelayRouteClaim
+} from "@hamedb89/localghost";
+
+const claim = signRelayRouteClaim({
+  host: "plan-summer-base-hamed.ghost.moonlit-otter.example",
+  scope: "socialworkouts:preview",
+  agentId: "local-agent-1",
+  expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+}, signingSecret);
+
+const route = createRelayRouteRegistration({
+  authorizationHeader: request.headers.get("authorization"),
+  agentToken,
+  claimToken: claim.token,
+  signingSecret,
+  expectedScope: "socialworkouts:preview",
+  target: { host: "127.0.0.1", port: 5173 },
+  passwordProtected: true
+});
+```
+
+The relay helpers enforce these rules:
+
+- Route registration requires a matching `Bearer <agentToken>`.
+- Route claims are exact hostnames, signed, scoped, and expiring.
+- Wildcard route claims are rejected.
+- Targets must be explicit `{ host, port, protocol }` objects, never arbitrary URL strings.
+- Default target hosts are only `localhost`, `127.0.0.1`, and `::1`.
+- Blocked ports are `22`, `2375`, `2376`, `5432`, `6379`, `9200`, `9229`, and `27017`.
+- LAN/private-network targets require explicit target-policy opt-in and explicit allowed hosts.
+- Private previews require password or app auth unless `publicMode: true` is explicitly set.
+- `isRelayRouteActive(route, { agentConnected })` expires routes when the local agent disconnects or the claim expires.
+- Default limits cover request body size, response size, timeout, concurrency, per-route rate, and per-IP rate.
+- `stripRelayForwardHeaders()` removes hop-by-hop and `x-localghost-*` internal headers before forwarding.
+- `redactRelayHeaders()` and `redactRelayLogUrl()` redact `Authorization`, `Cookie`, `Set-Cookie`, and token-like query params from logs.
+- `renderRelayOfflineResponse()` returns a safe offline page with no secrets or stack traces.
+- Vite integration continues to generate explicit `allowedHosts`; it never sets `allowedHosts: true`.
+
+Run the guardrail tests locally:
+
+```sh
+npm test
+npm run test:cli
+npm run test:coverage
+```
+
+`npm test` checks the built package surface. `npm run test:cli` runs the local CLI smoke checks. `npm run test:coverage` imports the source modules and enforces coverage thresholds for `src/relay.ts` and `src/tunnel.ts`.
+
 ## Custom Subdomain
 
 Use a custom entry label only when the production route truly needs it:
