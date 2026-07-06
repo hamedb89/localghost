@@ -9,6 +9,7 @@ const {
   constructGhostTunnelUrl,
   getGhostTunnelDefaultDisplayUrl,
   getGhostTunnelDisplayUrl,
+  getGhostTunnelDisplayUrls,
   getGhostTunnelWildcardHost,
   getGhostTunnelPreviewUrl,
   parseGhostTunnelHost,
@@ -53,17 +54,17 @@ test("parses only the default route-project-owner namespace", () => {
   });
 
   assert.equal(
-    parseGhostTunnelHost("preview.ghost.moonlit-otter.example", "moonlit-otter.example", true),
+    parseGhostTunnelHost("preview.ghost.moonlit-otter.example", "moonlit-otter.example"),
     null
   );
   assert.equal(
-    parseGhostTunnelHost("plan-summer-base-hamed.other.moonlit-otter.example", "moonlit-otter.example", true),
+    parseGhostTunnelHost("plan-summer-base-hamed.other.moonlit-otter.example", "moonlit-otter.example"),
     null
   );
 });
 
 test("requires explicit HTTPS and authentication for secure requests", () => {
-  const ghostTunnel = resolveGhostTunnelConfig(true);
+  const ghostTunnel = resolveGhostTunnelConfig({});
 
   assert.throws(
     () => assertSecureGhostTunnelRequest({
@@ -165,7 +166,7 @@ test("keeps invalid tunnel config and namespace values out", () => {
 
 test("documents the production wildcard host without making it a route claim", () => {
   assert.equal(
-    getGhostTunnelWildcardHost("moonlit-otter.example", true),
+    getGhostTunnelWildcardHost("moonlit-otter.example"),
     "*.ghost.moonlit-otter.example"
   );
 });
@@ -184,17 +185,18 @@ test("resolves configured preview URLs for logs", () => {
   assert.equal(config.displayUrl, "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
   assert.equal(getGhostTunnelPreviewUrl(config), "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
   assert.equal(getGhostTunnelDisplayUrl(config), "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
-  assert.equal(getGhostTunnelPreviewUrl(true), null);
+  assert.equal(getGhostTunnelPreviewUrl({}), null);
 });
 
-test("logs default display templates when ghostTunnel is true or object-only", () => {
-  const defaults = resolveGhostTunnelConfig(true);
+test("logs default display templates when ghostTunnel is shorthand or object-only", () => {
+  const defaults = resolveGhostTunnelConfig("manual");
 
-  assert.equal(defaults.displayUrl, "https://<route>-<project>-<owner>.ghost.<domain>/");
-  assert.equal(getGhostTunnelDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
-  assert.equal(getGhostTunnelDefaultDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
+  assert.equal(defaults.mode, "manual");
+  assert.equal(defaults.displayUrl, "https://<route>-<project>-<owner>.ghost.*/");
+  assert.equal(getGhostTunnelDisplayUrl({}), "https://<route>-<project>-<owner>.ghost.*/");
+  assert.equal(getGhostTunnelDefaultDisplayUrl({}), "https://<route>-<project>-<owner>.ghost.*/");
   assert.equal(
-    resolveGhostTunnelConfig(true, {
+    resolveGhostTunnelConfig({}, {
       domain: "moonlit-otter.example",
       route: "app",
       project: "decision-layer",
@@ -211,6 +213,42 @@ test("logs default display templates when ghostTunnel is true or object-only", (
     }
   });
 
-  assert.equal(custom.displayUrl, "https://<owner>-<project>-<route>.preview.<domain>/");
+  assert.equal(custom.displayUrl, "https://<owner>-<project>-<route>.preview.*/");
   assert.equal(getGhostTunnelPreviewUrl(custom), null);
+});
+
+test("supports manual/public mode and configured domains", () => {
+  const config = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: ["moonlit-otter.example", "staging.moonlit-otter.example"]
+  }, {
+    route: "plan",
+    project: "summer-base",
+    owner: "hamed"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.mode, "public");
+  assert.deepEqual(config.domains, ["moonlit-otter.example", "staging.moonlit-otter.example"]);
+  assert.deepEqual(getGhostTunnelDisplayUrls(config), [
+    "https://plan-summer-base-hamed.ghost.moonlit-otter.example/",
+    "https://plan-summer-base-hamed.ghost.staging.moonlit-otter.example/"
+  ]);
+
+  assert.equal(resolveGhostTunnelConfig("manual").mode, "manual");
+  assert.equal(resolveGhostTunnelConfig("public").mode, "public");
+});
+
+test("keeps disabled Ghost Tunnel domains without displaying routes", () => {
+  const config = resolveGhostTunnelConfig({
+    domains: "moonlit-otter.example",
+    enabled: false
+  });
+
+  assert.equal(config.enabled, false);
+  assert.deepEqual(config.domains, ["moonlit-otter.example"]);
+  assert.equal(config.displayUrl, undefined);
+  assert.deepEqual(config.displayUrls, []);
+  assert.equal(getGhostTunnelDisplayUrl(config), null);
+  assert.deepEqual(getGhostTunnelDisplayUrls(config), []);
 });

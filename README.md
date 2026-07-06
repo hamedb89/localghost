@@ -271,37 +271,49 @@ Then the daily script can stay small:
 
 `www.` aliases are enabled by default. A `.localghost` entry like `app.localhost 5173` also sets up `www.app.localhost` unless `wwwAlias: false` is set in `localghost.config.mjs`.
 
-`ghostTunnel: true` is the production opt-in for a wildcard product entrypoint on top of your deployed Vite app. The default namespace is `<route>-<project>-<owner>.ghost.<domain>`:
+`ghostTunnel` is the production opt-in for a wildcard product entrypoint on top of your deployed Vite app. The default namespace is `<route>-<project>-<owner>.ghost.<domain>`, and omitted domains are shown as `*` in logs:
 
 ```js
 import { defineLocalghostConfig } from "@hamedb89/localghost";
 
 export default defineLocalghostConfig({
-  ghostTunnel: true,
-  ghostTunnelDomain: "moonlit-otter.example"
+  ghostTunnel: {
+    domains: "moonlit-otter.example",
+    mode: "manual"
+  }
 });
 ```
 
-With `true`, local route and Vite startup logs use local defaults for `route`, `project`, and `owner`. If `ghostTunnelDomain` is set, the domain is filled too:
+With `ghostTunnel: { domains }`, local route and Vite startup logs use local defaults for `route`, `project`, and `owner`, then fill the configured domain:
 
 ```txt
-ghostTunnel running on https://app-decision-layer-hamed.ghost.moonlit-otter.example/
+localghost ghost tunnel
+  mode: manual
+  expected: https://app-decision-layer-hamed.ghost.moonlit-otter.example/
 ```
 
-Without `ghostTunnelDomain`, the log keeps the domain placeholder so you can see the expected shape.
+Without `domains`, the expected URL stays wildcarded:
+
+```txt
+localghost ghost tunnel
+  mode: manual
+  expected: https://app-decision-layer-hamed.ghost.*/
+```
+
+`ghostTunnel: "manual"` and `ghostTunnel: "public"` are shorthand modes. `manual` is the default; use `enabled: false` to keep domains/config in the file without exposing the tunnel surface.
 
 Use object form to override defaults or provide a concrete preview URL:
 
 ```js
 export default defineLocalghostConfig({
   ghostTunnel: {
+    domains: "moonlit-otter.example",
     preview: {
       route: "plan",
       project: "summer-base",
       owner: "hamed"
     }
-  },
-  ghostTunnelDomain: "moonlit-otter.example"
+  }
 });
 ```
 
@@ -334,7 +346,7 @@ const route = assertSecureGhostTunnelRequest({
 
 That constructs `https://plan-summer-base-hamed.ghost.moonlit-otter.example/`, validates the same host shape, requires HTTPS by default, and requires the app to confirm auth by default. See [Ghost Tunnel](./docs/ghost-tunnel.md) for the production DNS and routing flow.
 
-When `ghostTunnel.preview` is configured, local route and Vite startup logs include the concrete URL: `ghostTunnel running on https://plan-summer-base-hamed.ghost.moonlit-otter.example/`.
+When `ghostTunnel.preview` is configured, local route and Vite startup logs include the concrete URL as `expected: https://plan-summer-base-hamed.ghost.moonlit-otter.example/`. In an interactive Vite terminal, press `g` to show the Ghost Tunnel configuration and open a numbered concrete URL. Wildcard `*` URLs are shown for clarity, but the menu only opens configured concrete domains.
 
 Relay guardrails are private-by-default: public requests never choose the local target, route registration requires a matching local-agent bearer token, signed route claims are exact/scoped/expiring, and default targets are limited to `localhost`, `127.0.0.1`, and `::1` with dangerous ports blocked. The package exports relay helpers for registration, target validation, header stripping, log redaction, limits, and safe offline responses.
 

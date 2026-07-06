@@ -123,7 +123,10 @@ As a production app, I want one opt-in flag that makes `<route>-<project>-<owner
 
 ```js
 export default defineLocalghostConfig({
-  ghostTunnel: true
+  ghostTunnel: {
+    domains: "moonlit-otter.example",
+    mode: "manual"
+  }
 });
 ```
 
@@ -131,7 +134,7 @@ The production flow is DNS wildcard -> `constructGhostTunnelUrl` -> deployed app
 
 Relay registration is local-agent-only: signed exact-host claims, explicit local targets, private access by default, no arbitrary URL proxy endpoint, and safe offline behavior when the agent disconnects.
 
-When `ghostTunnel: true` is configured, route and Vite startup logs print local defaults for `route`, `project`, and `owner`. Add top-level `ghostTunnelDomain` to fill the production base domain. When `ghostTunnel.preview` is configured, they print the concrete preview URL.
+When `ghostTunnel` is configured, route and Vite startup logs print local defaults for `route`, `project`, and `owner`. Add `ghostTunnel.domains` to fill one or more production base domains; omit it to show the wildcard domain as `*`. When `ghostTunnel.preview` is configured, they print the concrete preview URL. In an interactive Vite terminal, press `g` to show Ghost Tunnel configuration and open a numbered concrete URL.
 
 ## Reset For Testing
 

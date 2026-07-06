@@ -23,9 +23,10 @@ import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
 import { canPrompt, confirm } from "./prompt.js";
-import { formatDomainRoutes } from "./routes.js";
+import { formatDomainRoutes, formatGhostTunnel } from "./routes.js";
 import { getLocalghostStatePath, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
+import type { GhostTunnelConfig } from "./tunnel.js";
 import { execa } from "execa";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
@@ -38,10 +39,21 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   }
 }
 
-function logDomainRoutes(entries: ReturnType<typeof readDevHosts>, options: { https?: boolean; ghostTunnelUrl?: string | undefined } = {}) {
+function shouldColor() {
+  return process.stdout.isTTY && !process.env.NO_COLOR;
+}
+
+function logDomainRoutes(
+  entries: ReturnType<typeof readDevHosts>,
+  options: { https?: boolean; ghostTunnel?: GhostTunnelConfig; verbose?: boolean } = {}
+) {
   console.log(formatDomainRoutes(entries, options));
-  if (options.ghostTunnelUrl) {
-    console.log(`ghostTunnel running on ${options.ghostTunnelUrl}`);
+  if (options.ghostTunnel?.enabled) {
+    console.log(formatGhostTunnel(options.ghostTunnel, {
+      color: shouldColor(),
+      label: "expected",
+      verbose: options.verbose === true
+    }));
   }
 }
 
@@ -567,7 +579,7 @@ program
     const entries = context.entries;
 
     warnAboutLocalMdns(entries);
-    logDomainRoutes(entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
+    logDomainRoutes(entries, { https, ghostTunnel: context.ghostTunnel });
 
     explainHostsPassword();
     const hostsResult = await updateSystemHosts(projectName, entries);
@@ -628,7 +640,7 @@ program
     }
 
     warnAboutLocalMdns(context.entries);
-    logDomainRoutes(context.entries, { https: true, ghostTunnelUrl: context.ghostTunnel.displayUrl });
+    logDomainRoutes(context.entries, { https: true, ghostTunnel: context.ghostTunnel });
     explainTrustPassword();
 
     const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https: true });
@@ -788,12 +800,17 @@ program
   .option("--http", "Print domain URLs with http instead of https")
   .option("--https", "Print domain URLs with https")
   .option("--ssl", "Alias for --https")
-  .action(async (options: ConfigCliOptions & { http?: boolean } & ProxyModeCliOptions) => {
+  .option("--verbose", "Print Ghost Tunnel mode, domains, and guardrails")
+  .action(async (options: ConfigCliOptions & { http?: boolean; verbose?: boolean } & ProxyModeCliOptions) => {
     const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
     warnAboutLocalMdns(context.entries);
     console.log(formatDomainRoutes(context.entries, { https: options.http ? false : context.https }));
-    if (context.ghostTunnel.displayUrl) {
-      console.log(`ghostTunnel running on ${context.ghostTunnel.displayUrl}`);
+    if (context.ghostTunnel.enabled) {
+      console.log(formatGhostTunnel(context.ghostTunnel, {
+        color: shouldColor(),
+        label: "expected",
+        verbose: options.verbose === true
+      }));
     }
   });
 
@@ -862,7 +879,7 @@ program
     }
 
     warnAboutLocalMdns(readiness.entries);
-    logDomainRoutes(readiness.entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
+    logDomainRoutes(readiness.entries, { https, ghostTunnel: context.ghostTunnel });
 
     const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
@@ -959,7 +976,7 @@ program
     }
 
     warnAboutLocalMdns(context.entries);
-    logDomainRoutes(context.entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
+    logDomainRoutes(context.entries, { https, ghostTunnel: context.ghostTunnel });
 
     const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);

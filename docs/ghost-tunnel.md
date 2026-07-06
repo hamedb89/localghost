@@ -18,37 +18,49 @@ The feature is off by default. Opt in from `localghost.config.mjs`:
 import { defineLocalghostConfig } from "@hamedb89/localghost";
 
 export default defineLocalghostConfig({
-  ghostTunnel: true,
-  ghostTunnelDomain: "moonlit-otter.example"
+  ghostTunnel: {
+    domains: "moonlit-otter.example",
+    mode: "manual"
+  }
 });
 ```
 
-With `true`, route output and Vite startup output use local defaults for `route`, `project`, and `owner`. If `ghostTunnelDomain` is set, the domain is filled too:
+With `ghostTunnel: { domains }`, route output and Vite startup output use local defaults for `route`, `project`, and `owner`, then fill the configured domain:
 
 ```txt
-ghostTunnel running on https://app-decision-layer-hamed.ghost.moonlit-otter.example/
+localghost ghost tunnel
+  mode: manual
+  expected: https://app-decision-layer-hamed.ghost.moonlit-otter.example/
 ```
 
-Without `ghostTunnelDomain`, the log keeps the domain placeholder so you can see the expected shape.
+Without `domains`, the log keeps the production domain wildcarded with `*`:
+
+```txt
+localghost ghost tunnel
+  mode: manual
+  expected: https://app-decision-layer-hamed.ghost.*/
+```
+
+`manual` is the default activation mode. `ghostTunnel: "manual"` and `ghostTunnel: "public"` are shorthand modes. Use `enabled: false` to keep domains/config in the file without exposing the tunnel surface.
 
 Use object form to override defaults or provide a concrete preview URL:
 
 ```js
 export default defineLocalghostConfig({
   ghostTunnel: {
+    domains: "moonlit-otter.example",
     preview: {
       route: "plan",
       project: "summer-base",
       owner: "hamed"
     }
-  },
-  ghostTunnelDomain: "moonlit-otter.example"
+  }
 });
 ```
 
 ## Flow
 
-1. Add `ghostTunnel: true` or `ghostTunnel.preview` to `localghost.config.mjs`, with `ghostTunnelDomain` when the production base domain is known.
+1. Add `ghostTunnel: { domains: "your-domain.com" }`, `ghostTunnel: "manual"`, or `ghostTunnel.preview` to `localghost.config.mjs`.
 2. Point the wildcard DNS record for `*.ghost.<your-domain>` at the deployed app.
 3. Route `*.ghost.<your-domain>` to the same production app that serves the Vite build.
 4. In production request handling, read the Localghost project config without resolving local `.localghost` setup.
@@ -87,8 +99,12 @@ const route = assertSecureGhostTunnelRequest({
 When `ghostTunnel.preview` is configured, Localghost logs the concrete preview URL in route output and Vite startup output:
 
 ```txt
-ghostTunnel running on https://plan-summer-base-hamed.ghost.moonlit-otter.example/
+localghost ghost tunnel
+  mode: manual
+  expected: https://plan-summer-base-hamed.ghost.moonlit-otter.example/
 ```
+
+In an interactive Vite terminal, press `g` to show the Ghost Tunnel configuration and open a numbered concrete URL. Wildcard `*` URLs are shown for observability, but the menu only opens configured concrete domains.
 
 When the app is behind a trusted deployment proxy, derive `protocol` from the platform's trusted request metadata. Do not trust arbitrary forwarded headers unless the platform has already normalized them.
 
@@ -98,8 +114,9 @@ The default namespace tags are `route`, `project`, and `owner`, joined with `-`.
 
 ```js
 export default defineLocalghostConfig({
-  ghostTunnel: true,
-  ghostTunnelDomain: "moonlit-otter.example"
+  ghostTunnel: {
+    domains: "moonlit-otter.example"
+  }
 });
 ```
 

@@ -1,16 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { normalize, resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { emitKeypressEvents } from "node:readline";
 import type { ConfigEnv, HmrOptions, Plugin, UserConfig, ViteDevServer, WsOptions } from "vite";
 import { registerLocalghostRun, registerLocalghostSetup, unregisterLocalghostRun } from "./activity.js";
 import {
   getConfigFileCandidates,
   getProjectName,
+  readDevHosts,
   resolveDevHostsPath,
   sanitizeProjectName,
   type ConfigPattern,
   type ReadDevHostsOptions
 } from "./config.js";
-import { addDefaultWwwAliases, resolveLocalghostContext, type LocalghostContext } from "./context.js";
+import { addDefaultWwwAliases, readLocalghostProjectConfig, resolveLocalghostContext, type LocalghostContext } from "./context.js";
 import { checkCaddy } from "./doctor.js";
 import { isProductionLike } from "./env.js";
 import { writeTextFile } from "./fs.js";
@@ -19,7 +22,8 @@ import { ask, canPrompt, confirm } from "./prompt.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 import type { DevHostEntry } from "./parse.js";
-import type { GhostTunnelOptions } from "./tunnel.js";
+import { resolveGhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
+import { formatGhostTunnel } from "./routes.js";
 
 export type LocalGhostPluginOptions = {
   cwd?: string;
@@ -35,8 +39,8 @@ export type LocalGhostPluginOptions = {
   setup?: boolean | "prompt";
   localghostConfig?: string | false;
   wwwAlias?: boolean;
-  ghostTunnelDomain?: string;
   ghostTunnel?: GhostTunnelOptions;
+  verbose?: boolean;
 };
 
 type ServerOptions = NonNullable<UserConfig["server"]>;
@@ -80,13 +84,25 @@ function printLocalHosts(server: ViteDevServer, context: LocalghostContext | und
     ...urls.slice(1).map((url) => `  also:   ${url}`),
     vitePort ? `  target: http://127.0.0.1:${vitePort}/` : undefined,
     https ? "  proxy:  Caddy local HTTPS" : undefined,
-    context.ghostTunnel.displayUrl ? `  ghostTunnel running on ${context.ghostTunnel.displayUrl}` : undefined
+    context.ghostTunnel.enabled ? formatGhostTunnel(context.ghostTunnel, {
+      color: shouldColor(),
+      label: "ready",
+      verbose: optionsVerbose(context)
+    }) : undefined
   ].filter((line): line is string => Boolean(line));
 
   server.config.logger.info(lines.join("\n"), {
     clear: false,
     timestamp: false
   });
+}
+
+function shouldColor() {
+  return process.stdout.isTTY && !process.env.NO_COLOR;
+}
+
+function optionsVerbose(context: LocalghostContext) {
+  return process.env.LOCALGHOST_VERBOSE === "1" || process.env.LOCALGHOST_VERBOSE === "true" || context.ghostTunnel.displayUrls.length > 1;
 }
 
 function readOptionsFromPlugin(options: LocalGhostPluginOptions): ReadDevHostsOptions {
@@ -128,6 +144,67 @@ function renderConfig(hosts: string[], port: number) {
 function defaultHost(cwd: string) {
   const projectName = sanitizeProjectName(getProjectName(cwd).split("/").pop() ?? "app");
   return `${projectName}.localhost`;
+}
+
+function getPackageOwner(cwd: string) {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(cwd, "package.json"), "utf8")) as { name?: unknown };
+    if (typeof pkg.name === "string" && pkg.name.startsWith("@")) {
+      return pkg.name.slice(1).split("/")[0];
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function getLocalOwner(cwd: string) {
+  return sanitizeProjectName(process.env.LOCALGHOST_OWNER ?? getPackageOwner(cwd) ?? process.env.USER ?? process.env.USERNAME ?? "local");
+}
+
+function getRouteName(primaryHost: string, fallback: string) {
+  return sanitizeProjectName(primaryHost.split(".")[0] ?? fallback);
+}
+
+function readBuildEntries(options: LocalGhostPluginOptions) {
+  const readOptions = readOptionsFromPlugin(options);
+  const resolved = resolveDevHostsPath(readOptions);
+  if (!resolved.exists) return [];
+
+  try {
+    return readDevHosts(readOptions);
+  } catch {
+    return [];
+  }
+}
+
+async function maybePrintBuildGhostTunnel(options: LocalGhostPluginOptions) {
+  const cwd = options.cwd ?? process.cwd();
+  const projectConfig = await readLocalghostProjectConfig({
+    cwd,
+    ...(typeof options.localghostConfig !== "undefined" ? { configFile: options.localghostConfig } : {})
+  });
+  const explicitGhostTunnel = typeof options.ghostTunnel !== "undefined" ? options.ghostTunnel : projectConfig.config.ghostTunnel;
+  if (!explicitGhostTunnel) return;
+
+  const entries = readBuildEntries(options);
+  const projectName = sanitizeProjectName(projectConfig.config.project ?? getProjectName(cwd));
+  const primaryHost = options.primaryHost ?? entries[0]?.host ?? defaultHost(cwd);
+  const ghostTunnel = resolveGhostTunnelConfig(explicitGhostTunnel, {
+    route: getRouteName(primaryHost, projectName),
+    project: sanitizeProjectName(projectConfig.config.project ?? getProjectName(cwd)),
+    owner: getLocalOwner(cwd)
+  });
+
+  if (!ghostTunnel.enabled) return;
+
+  const formatted = formatGhostTunnel(ghostTunnel, {
+    color: shouldColor(),
+    label: "configured",
+    verbose: options.verbose === true || process.env.LOCALGHOST_VERBOSE === "1" || process.env.LOCALGHOST_VERBOSE === "true"
+  });
+  if (formatted) console.log(formatted);
 }
 
 async function promptForHosts(cwd: string, port: number) {
@@ -238,6 +315,94 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
   return context;
 }
 
+function isConcreteGhostUrl(url: string) {
+  return !url.includes("*") && !url.includes("<") && /^https?:\/\//.test(url);
+}
+
+function getConcreteGhostUrls(context: LocalghostContext) {
+  return context.ghostTunnel.displayUrls.filter(isConcreteGhostUrl);
+}
+
+function openExternalUrl(url: string) {
+  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: "ignore"
+  });
+  child.unref();
+}
+
+function installGhostTunnelMenu(server: ViteDevServer, context: LocalghostContext | undefined) {
+  if (!context?.ghostTunnel.enabled || !process.stdin.isTTY) return undefined;
+
+  emitKeypressEvents(process.stdin);
+
+  let active = false;
+  const concreteUrls = getConcreteGhostUrls(context);
+
+  const printMenu = () => {
+    active = true;
+    const lines = [
+      "",
+      formatGhostTunnel(context.ghostTunnel, {
+        color: shouldColor(),
+        label: "ready",
+        verbose: true
+      }) ?? "localghost ghost tunnel",
+      ""
+    ];
+
+    if (concreteUrls.length === 0) {
+      lines.push("  No concrete Ghost Tunnel domain configured.");
+      lines.push("  Add ghostTunnel.domains to localghost.config.mjs to open a URL from this menu.");
+      active = false;
+    } else {
+      concreteUrls.forEach((url, index) => {
+        lines.push(`  ${index + 1}. ${url}`);
+      });
+      lines.push("");
+      lines.push("  Press a number to open, or escape to cancel.");
+    }
+
+    server.config.logger.info(lines.join("\n"), {
+      clear: false,
+      timestamp: false
+    });
+  };
+
+  const onKeypress = (_input: string, key: { name?: string; ctrl?: boolean } = {}) => {
+    if (key.ctrl && key.name === "c") return;
+
+    if (!active) {
+      if (key.name === "g") printMenu();
+      return;
+    }
+
+    if (key.name === "escape") {
+      active = false;
+      return;
+    }
+
+    const index = Number.parseInt(key.name ?? "", 10) - 1;
+    const url = concreteUrls[index];
+    if (!url) return;
+
+    active = false;
+    openExternalUrl(url);
+    server.config.logger.info(`localghost opened ${url}`, {
+      clear: false,
+      timestamp: false
+    });
+  };
+
+  process.stdin.on("keypress", onKeypress);
+
+  return () => {
+    process.stdin.off("keypress", onKeypress);
+  };
+}
+
 export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin {
   let resolvedEntries: DevHostEntry[] = [];
   let resolvedVitePort: number | undefined;
@@ -252,6 +417,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
 
     async config(userConfig, configEnv: ConfigEnv): Promise<UserConfig> {
       if (configEnv.command !== "serve" || configEnv.mode === "production" || isProductionLike()) {
+        await maybePrintBuildGhostTunnel(options);
         return {};
       }
 
@@ -366,14 +532,21 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
         activityRunId = run.id;
       }
 
+      const cleanupGhostMenu = installGhostTunnelMenu(server, resolvedContext);
+
       const cleanupActivity = () => {
         if (!activityRunId) return;
         unregisterLocalghostRun(activityRunId);
         activityRunId = undefined;
       };
 
-      server.httpServer?.once("close", cleanupActivity);
-      process.once("exit", cleanupActivity);
+      const cleanup = () => {
+        cleanupActivity();
+        cleanupGhostMenu?.();
+      };
+
+      server.httpServer?.once("close", cleanup);
+      process.once("exit", cleanup);
     }
   };
 }

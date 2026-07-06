@@ -53,7 +53,7 @@ export {
   stripRelayForwardHeaders,
   verifyRelayRouteClaim
 } from "./relay.js";
-export { formatDomainRoutes, getDomainRoutes } from "./routes.js";
+export { formatDomainRoutes, formatGhostTunnel, getDomainRoutes } from "./routes.js";
 export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 export {
   assertSecureGhostTunnelRequest,
@@ -62,6 +62,7 @@ export {
   constructGhostTunnelUrl,
   getGhostTunnelDefaultDisplayUrl,
   getGhostTunnelDisplayUrl,
+  getGhostTunnelDisplayUrls,
   getGhostTunnelEntryHost,
   getGhostTunnelPreviewUrl,
   getGhostTunnelWildcardHost,
@@ -112,6 +113,8 @@ export type {
   ConstructGhostTunnelUrlInput,
   GhostTunnelConfig,
   GhostTunnelDisplayDefaults,
+  GhostTunnelDomainOptions,
+  GhostTunnelMode,
   GhostTunnelNamespaceConfig,
   GhostTunnelNamespaceOptions,
   GhostTunnelNamespaceTag,

@@ -85,27 +85,29 @@ test("routes CLI logs configured Ghost Tunnel preview URL", async () => {
   const { stdout } = await runCli(["routes", "--cwd", cwd]);
 
   assert.match(stdout, /http:\/\/app\.localhost\//);
-  assert.match(stdout, /ghostTunnel running on https:\/\/plan-summer-base-hamed\.ghost\.moonlit-otter\.example\//);
+  assert.match(stdout, /localghost ghost tunnel/);
+  assert.match(stdout, /expected: https:\/\/plan-summer-base-hamed\.ghost\.moonlit-otter\.example\//);
 });
 
-test("routes CLI logs default Ghost Tunnel template when enabled with true", async () => {
+test("routes CLI logs default Ghost Tunnel wildcard when enabled with manual shorthand", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "localghost-routes-default-"));
   await writeFile(join(cwd, ".localghost"), "app.localhost 5173\n");
-  await writeFile(join(cwd, "localghost.config.mjs"), "export default { ghostTunnel: true };\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), "export default { ghostTunnel: 'manual' };\n");
 
   const { stdout } = await runCli(["routes", "--cwd", cwd]);
 
   assert.match(stdout, /http:\/\/app\.localhost\//);
-  assert.match(stdout, /ghostTunnel running on https:\/\/app-app-tester\.ghost\.<domain>\//);
+  assert.match(stdout, /expected: https:\/\/app-app-tester\.ghost\.\*\//);
 });
 
-test("routes CLI fills the Ghost Tunnel domain when ghostTunnelDomain is configured", async () => {
+test("routes CLI fills the Ghost Tunnel domain when domains are configured", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "localghost-routes-domain-"));
   await writeFile(join(cwd, ".localghost"), "app.localhost 5173\n");
   await writeFile(join(cwd, "localghost.config.mjs"), [
     "export default {",
-    "  ghostTunnel: true,",
-    "  ghostTunnelDomain: 'moonlit-otter.example'",
+    "  ghostTunnel: {",
+    "    domains: 'moonlit-otter.example'",
+    "  }",
     "};",
     ""
   ].join("\n"));
@@ -113,5 +115,44 @@ test("routes CLI fills the Ghost Tunnel domain when ghostTunnelDomain is configu
   const { stdout } = await runCli(["routes", "--cwd", cwd]);
 
   assert.match(stdout, /http:\/\/app\.localhost\//);
-  assert.match(stdout, /ghostTunnel running on https:\/\/app-app-tester\.ghost\.moonlit-otter\.example\//);
+  assert.match(stdout, /expected: https:\/\/app-app-tester\.ghost\.moonlit-otter\.example\//);
+});
+
+test("Vite build hook logs configured Ghost Tunnel without local setup", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-vite-build-"));
+  await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "decision-layer" }, null, 2));
+  await writeFile(join(cwd, ".localghost"), "decisionlayer.localhost 5173\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), [
+    "export default {",
+    "  ghostTunnel: {",
+    "    domains: 'decisionlayer.com'",
+    "  }",
+    "};",
+    ""
+  ].join("\n"));
+
+  const previousOwner = process.env.LOCALGHOST_OWNER;
+  process.env.LOCALGHOST_OWNER = "tester";
+  const { localGhostPlugin } = await import(new URL("../dist/vite.js", import.meta.url));
+  const plugin = localGhostPlugin({ cwd });
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (message) => {
+    logs.push(String(message));
+  };
+
+  try {
+    await plugin.config({}, { command: "build", mode: "production" });
+  } finally {
+    console.log = originalLog;
+    if (typeof previousOwner === "undefined") {
+      delete process.env.LOCALGHOST_OWNER;
+    } else {
+      process.env.LOCALGHOST_OWNER = previousOwner;
+    }
+  }
+
+  const output = logs.join("\n");
+  assert.match(output, /localghost ghost tunnel/);
+  assert.match(output, /configured: https:\/\/decisionlayer-decision-layer-tester\.ghost\.decisionlayer\.com\//);
 });

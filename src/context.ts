@@ -26,7 +26,6 @@ export type LocalghostContextOptions = {
   primaryHost?: string;
   dynamicPort?: boolean;
   wwwAlias?: boolean;
-  ghostTunnelDomain?: string;
   ghostTunnel?: GhostTunnelOptions;
 };
 
@@ -46,7 +45,6 @@ export type LocalghostContext = {
   primaryHost: string;
   https: boolean;
   wwwAlias: boolean;
-  ghostTunnelDomain?: string;
   ghostTunnel: GhostTunnelConfig;
   projectConfigPath?: string;
 };
@@ -208,9 +206,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     hosts[0] ??
     `${sanitizeProjectName(getProjectName(cwd))}.localhost`;
   const projectName = sanitizeProjectName(merged.project ?? getProjectName(cwd));
-  const ghostTunnelDomain = merged.ghostTunnelDomain;
   const ghostTunnel = resolveGhostTunnelConfig(merged.ghostTunnel, {
-    ...(ghostTunnelDomain ? { domain: ghostTunnelDomain } : {}),
     route: getRouteName(primaryHost, projectName),
     project: projectName,
     owner: getLocalOwner(cwd)
@@ -232,7 +228,6 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     primaryHost,
     https: merged.https ?? envHttps() ?? false,
     wwwAlias,
-    ...(ghostTunnelDomain ? { ghostTunnelDomain } : {}),
     ghostTunnel,
     ...(projectConfig.path ? { projectConfigPath: projectConfig.path } : {})
   };

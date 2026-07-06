@@ -172,6 +172,14 @@
         padding: 72px 0;
       }
 
+      .section.soft {
+        background:
+          radial-gradient(circle at 14% 8%, rgba(109, 63, 242, 0.09), transparent 26%),
+          linear-gradient(180deg, #fff 0%, #f7f8ff 100%);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
       .section h2 {
         margin: 0 0 24px;
         font-size: 34px;
@@ -195,6 +203,137 @@
       .card p { margin: 0; color: var(--muted); line-height: 1.55; }
       .card a { color: var(--violet); font-weight: 800; }
 
+      .toc {
+        padding: 28px 0;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .toc-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .toc-title {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .toc-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .toc-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 800;
+        background: var(--mist);
+      }
+
+      .toc-links a:hover {
+        border-color: rgba(109, 63, 242, 0.38);
+        color: var(--violet);
+      }
+
+      .feature-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 28px;
+        margin-bottom: 28px;
+      }
+
+      .feature-copy {
+        max-width: 690px;
+      }
+
+      .feature-copy .lead {
+        margin-top: 12px;
+        font-size: 18px;
+      }
+
+      .tiny-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 52px;
+        margin-bottom: 18px;
+        padding: 8px 14px 8px 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.72);
+        box-shadow: 0 18px 50px rgba(109, 63, 242, 0.09);
+      }
+
+      .tiny-mark img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+
+      .tiny-mark span {
+        font-weight: 800;
+      }
+
+      .ghost-wordmark {
+        display: block;
+        width: min(230px, 64vw);
+        height: auto;
+        margin: 0 0 14px;
+      }
+
+      .ghost-visual {
+        position: relative;
+        flex: 0 0 min(36%, 330px);
+        min-height: 230px;
+        display: grid;
+        place-items: center;
+      }
+
+      .ghost-visual::before {
+        content: "";
+        position: absolute;
+        inset: 38px 8px 10px;
+        border-radius: 999px;
+        background: rgba(109, 63, 242, 0.13);
+        filter: blur(24px);
+      }
+
+      .ghost-visual img {
+        position: relative;
+        width: min(100%, 300px);
+        height: auto;
+        display: block;
+      }
+
+      .tunnel-grid {
+        grid-template-columns: 1.1fr 0.95fr 0.95fr;
+      }
+
+      .mini-image {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        box-shadow: 0 12px 28px rgba(109, 63, 242, 0.18);
+      }
+
       .mascot {
         width: min(360px, 80%);
         display: block;
@@ -213,6 +352,11 @@
         .nav-inner { align-items: flex-start; }
         .links { flex-wrap: wrap; justify-content: flex-end; }
         .hero-grid { grid-template-columns: 1fr; padding-top: 32px; }
+        .toc-inner { align-items: flex-start; flex-direction: column; }
+        .toc-links { justify-content: flex-start; }
+        .feature-head { display: block; }
+        .ghost-visual { margin: 18px auto 0; min-height: 190px; }
+        .tunnel-grid { grid-template-columns: 1fr; }
         .grid { grid-template-columns: 1fr; }
         .hero { min-height: auto; }
       }
@@ -227,6 +371,8 @@
             <span>Localghost</span>
           </a>
           <div class="links" aria-label="Project links">
+            <a href="#toc">Contents</a>
+            <a href="#ghost-tunnel">ghostTunnel</a>
             <a href="https://github.com/hamedb89/localghost">GitHub</a>
             <a href="https://www.npmjs.com/package/@hamedb89/localghost">npm</a>
             <a href="https://github.com/hamedb89/localghost#readme">Docs</a>
@@ -260,7 +406,18 @@ target: http://127.0.0.1:5173/</pre>
     </header>
 
     <main>
-      <section class="section">
+      <section class="toc" id="toc" aria-label="Table of contents">
+        <div class="wrap toc-inner">
+          <p class="toc-title">Contents</p>
+          <div class="toc-links">
+            <a href="#local-contract">Local dev contract</a>
+            <a href="#ghost-tunnel">ghostTunnel</a>
+            <a href="#trust">Trust and release</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="local-contract">
         <div class="wrap">
           <h2>One small contract for local dev</h2>
           <div class="grid">
@@ -291,7 +448,44 @@ target: http://127.0.0.1:5173/</pre>
           </div>
         </div>
       </section>
-      <section class="section">
+      <section class="section soft" id="ghost-tunnel">
+        <div class="wrap">
+          <div class="feature-head">
+            <div class="feature-copy">
+              <div class="tiny-mark">
+                <img src="assets/ghost-tunnel-app-icon.png" alt="">
+                <span>ghostTunnel</span>
+              </div>
+              <img class="ghost-wordmark" src="assets/ghost-tunnel-wordmark.png" alt="ghostTunnel">
+              <h2>Share a localhost route without moving the app.</h2>
+              <p class="lead">ghostTunnel is the opt-in production-facing Localghost entrypoint for stable wildcard previews like <code>plan-summer-base-hamed.ghost.moonlit-otter.example</code>.</p>
+            </div>
+            <div class="ghost-visual" aria-hidden="true">
+              <img src="assets/ghost-tunnel-portal.png" alt="">
+            </div>
+          </div>
+          <div class="grid tunnel-grid">
+            <article class="card">
+              <img class="mini-image" src="assets/ghost-tunnel-app-icon.png" alt="">
+              <h3>Friendly preview names</h3>
+              <p>Build names from <code>route</code>, <code>project</code>, and <code>owner</code>, then point <code>*.ghost.&lt;your-domain&gt;</code> at the deployed app.</p>
+            </article>
+            <article class="card">
+              <h3>Off by default</h3>
+              <p>Enable it explicitly with <code>ghostTunnel: true</code> or a <code>ghostTunnel.preview</code> object in <code>localghost.config.mjs</code>.</p>
+            </article>
+            <article class="card">
+              <h3>Guardrails included</h3>
+              <p>Requests are checked for host shape, HTTPS, auth, DNS-safe labels, and relay target policy before serving a tunnel surface.</p>
+            </article>
+          </div>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/hamedb89/localghost/blob/main/docs/ghost-tunnel.md">Read the ghostTunnel guide</a>
+            <a class="button secondary" href="https://github.com/hamedb89/localghost#readme">Back to README</a>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="trust">
         <div class="wrap">
           <h2>Built to be boring where it matters</h2>
           <div class="grid">
