@@ -155,7 +155,7 @@ test("Vite build hook logs configured Ghost Tunnel without local setup", async (
 
   const output = logs.join("\n");
   assert.match(output, /localghost ghost tunnel/);
-  assert.match(output, /configured: https:\/\/<route>-<project>-<owner>\.ghost\.decisionlayer\.com\//);
+  assert.match(output, /configured: https:\/\/decisionlayer-decision-layer-tester\.ghost\.decisionlayer\.com\//);
 });
 
 test("Vite serve hook logs interactive help for Localghost shortcut", async () => {
@@ -237,6 +237,6 @@ test("Vite serve hook logs interactive help for Localghost shortcut", async () =
 
   const output = logs.join("\n");
   assert.match(output, /localghost/);
-  assert.match(output, /ready: https:\/\/<route>-<project>-<owner>\.ghost\.copper-comet\.example\//);
+  assert.match(output, /ready: https:\/\/decisionlayer-decision-layer-hamedbahrami\.ghost\.copper-comet\.example\//);
   assert.match(output, /help:   press h \+ enter for Vite, g \+ enter for Localghost/);
 });
