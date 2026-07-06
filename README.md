@@ -31,6 +31,7 @@ Localghost is a tiny Node.js CLI for friendly local domains in app repos. Add it
 
 - CI runs typecheck, build, site build, and npm package dry-run on Node 20 and 22.
 - GitHub Pages is deployed by Actions from the checked-in `site/` and `assets/` sources.
+- Preview the exact Pages artifact locally with `npm run site:serve`, then open `http://127.0.0.1:4173/`.
 - npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
 - Runtime dependencies are intentionally small: `commander` for the CLI and `execa` for process execution. Vite is an optional peer dependency for the Vite plugin.
 - No postinstall scripts, hidden Homebrew installs, or broad hosts-file rewrites.
