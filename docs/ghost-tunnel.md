@@ -67,6 +67,42 @@ export default defineLocalghostConfig({
 5. Construct tunnel URLs from `route`, `project`, and `owner`.
 6. Validate the incoming request host, protocol, and auth before serving the tunnel surface.
 
+## Vercel DNS
+
+For Vercel, add the Ghost Tunnel wildcard domain to the project first:
+
+```txt
+*.ghost.copper-comet.example
+```
+
+Then create the DNS record that points that wildcard at the same Vercel project. In Vercel-managed DNS, the record name is relative to the zone:
+
+```txt
+Name:  *.ghost
+Type:  ALIAS
+Value: <the Vercel DNS target shown for the project>
+TTL:   60
+```
+
+For example, if Vercel shows `cname.vercel-dns-016.com` as the project target, use the fully-qualified value with the trailing dot when the DNS form requires it:
+
+```txt
+Name:  *.ghost
+Type:  ALIAS
+Value: cname.vercel-dns-016.com.
+TTL:   60
+```
+
+When DNS is managed somewhere else, use the provider's wildcard subdomain shape:
+
+```txt
+Name:  *.ghost
+Type:  CNAME
+Value: cname.vercel-dns-016.com.
+```
+
+Do not use only `*` for Ghost Tunnel. A record named `*` covers `anything.copper-comet.example`, but Ghost Tunnel URLs look like `decisionlayer-decision-layer-hamed.ghost.copper-comet.example`, so the wildcard must live under `ghost`.
+
 ```ts
 import {
   assertSecureGhostTunnelRequest,
