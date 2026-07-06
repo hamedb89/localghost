@@ -9,7 +9,7 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.10-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/badge/npm-v0.1.11-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for clean local app domains. Add it as a dev dependency, keep running the command your team already knows, and use `http://app.localhost/` instead of remembering which port belongs to which process.
 
