@@ -21,7 +21,20 @@ export {
   resolveDevHostsPath,
   sanitizeProjectName
 } from "./config.js";
+export {
+  findGhostTunnelEntry,
+  getGhostTunnelPath,
+  listGhostTunnelEntries,
+  LOCALGHOST_GHOST_TUNNEL_FILE,
+  readGhostTunnelEntries,
+  resolveGhostTunnelPath
+} from "./ghost-file.js";
 export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
+export {
+  renderGhostTunnelRelayOfflineResponse,
+  renderGhostTunnelRouteMissingResponse,
+  resolveGhostTunnelRequest
+} from "./ghost-request.js";
 export { defineLocalghostConfig, readLocalghostProjectConfig, resolveLocalghostContext } from "./context.js";
 export { checkCaddy, runDoctor } from "./doctor.js";
 export { assertLocalDevelopment, getProductionEnvKeys, getProductionReason, isProductionLike } from "./env.js";
@@ -55,6 +68,7 @@ export {
 } from "./relay.js";
 export { formatDomainRoutes, formatGhostTunnel, getDomainRoutes } from "./routes.js";
 export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
+export { createVercelGhostTunnelHandler } from "./vercel.js";
 export {
   assertSecureGhostTunnelRequest,
   constructGhostTunnelHost,
@@ -95,6 +109,8 @@ export type {
 } from "./activity.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
 export type { CaddyModeOptions } from "./caddy.js";
+export type { ReadGhostTunnelOptions } from "./ghost-file.js";
+export type { GhostTunnelHttpResponse, ResolveGhostTunnelRequestInput, ResolvedGhostTunnelRequest } from "./ghost-request.js";
 export type { LocalghostContext, LocalghostContextOptions, LocalghostProjectConfig, LocalghostProjectConfigResult } from "./context.js";
 export type { DoctorResult } from "./doctor.js";
 export type {
@@ -111,6 +127,10 @@ export type {
 } from "./relay.js";
 export type {
   ConstructGhostTunnelUrlInput,
+  GhostTunnelAdapterOptions,
+  GhostTunnelAdapterProvider,
+  GhostTunnelAdapterStrategy,
+  GhostTunnelAdapterTransport,
   GhostTunnelConfig,
   GhostTunnelDisplayDefaults,
   GhostTunnelDomainOptions,
@@ -121,6 +141,9 @@ export type {
   GhostTunnelNamespaceValues,
   GhostTunnelOptions,
   GhostTunnelPreviewOptions,
+  GhostTunnelTransportConfig,
+  GhostTunnelTransportKind,
+  GhostTunnelTransportOptions,
   GhostTunnelRoute
 } from "./tunnel.js";
 export type { LocalghostEnvironment } from "./env.js";
@@ -131,3 +154,8 @@ export type { FindAvailablePortOptions } from "./port.js";
 export type { DomainRoute, DomainRouteOptions } from "./routes.js";
 export type { LocalghostState, LocalghostStateAction, WriteLocalghostStateInput } from "./state.js";
 export type { UpdateCheckCache, UpdateCheckResult } from "./update-check.js";
+export type {
+  CreateVercelGhostTunnelHandlerOptions,
+  VercelGhostTunnelRequestLike,
+  VercelGhostTunnelResponseLike
+} from "./vercel.js";

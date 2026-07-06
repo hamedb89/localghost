@@ -34,6 +34,24 @@ export type GhostTunnelMode = "manual" | "public";
 
 export type GhostTunnelDomainOptions = string | readonly string[];
 
+export type GhostTunnelAdapterProvider = "vercel";
+export type GhostTunnelAdapterStrategy = "same-project" | "separate-relay";
+export type GhostTunnelTransportKind = "none" | "ip" | "tunnel";
+export type GhostTunnelAdapterTransport = GhostTunnelTransportKind;
+
+export type GhostTunnelTransportOptions = GhostTunnelTransportKind | {
+  kind?: GhostTunnelTransportKind;
+};
+
+export type GhostTunnelTransportConfig = {
+  kind: GhostTunnelTransportKind;
+};
+
+export type GhostTunnelAdapterOptions = GhostTunnelAdapterProvider | {
+  provider: GhostTunnelAdapterProvider;
+  strategy?: GhostTunnelAdapterStrategy;
+};
+
 export type GhostTunnelOptions = false | GhostTunnelMode | {
   enabled?: boolean;
   mode?: GhostTunnelMode;
@@ -43,6 +61,8 @@ export type GhostTunnelOptions = false | GhostTunnelMode | {
   preview?: GhostTunnelPreviewOptions;
   requireHttps?: boolean;
   requireAuth?: boolean;
+  adapter?: GhostTunnelAdapterOptions;
+  transport?: GhostTunnelTransportOptions;
 };
 
 export type GhostTunnelConfig = {
@@ -57,6 +77,11 @@ export type GhostTunnelConfig = {
   displayUrls: string[];
   requireHttps: boolean;
   requireAuth: boolean;
+  transport: GhostTunnelTransportConfig;
+  adapter?: {
+    provider: GhostTunnelAdapterProvider;
+    strategy: GhostTunnelAdapterStrategy;
+  };
 };
 
 export type GhostTunnelDisplayDefaults = {
@@ -92,6 +117,14 @@ const DEFAULT_GHOST_TUNNEL_SUBDOMAIN = "ghost";
 const DEFAULT_GHOST_TUNNEL_NAMESPACE_TAGS = ["route", "project", "owner"] as const;
 const DEFAULT_GHOST_TUNNEL_NAMESPACE_SEPARATOR = "-";
 const DEFAULT_GHOST_TUNNEL_MODE: GhostTunnelMode = "manual";
+const DEFAULT_GHOST_TUNNEL_ADAPTER_STRATEGY: GhostTunnelAdapterStrategy = "same-project";
+const DEFAULT_GHOST_TUNNEL_TRANSPORT_KIND: GhostTunnelTransportKind = "none";
+
+type GhostTunnelLegacyAdapterOptions = {
+  provider: GhostTunnelAdapterProvider;
+  strategy?: GhostTunnelAdapterStrategy;
+  transport?: GhostTunnelTransportOptions;
+};
 
 function isResolvedGhostTunnelConfig(value: GhostTunnelOptions | GhostTunnelConfig | undefined): value is GhostTunnelConfig {
   return typeof value === "object" && value !== null && "enabled" in value;
@@ -153,6 +186,55 @@ function normalizeDomains(domains: GhostTunnelDomainOptions | undefined) {
 
 function parseGhostTunnelMode(value: GhostTunnelMode | undefined) {
   return value ?? DEFAULT_GHOST_TUNNEL_MODE;
+}
+
+function parseGhostTunnelAdapterStrategy(value: GhostTunnelAdapterStrategy | undefined) {
+  if (typeof value === "undefined") return DEFAULT_GHOST_TUNNEL_ADAPTER_STRATEGY;
+  if (value === "same-project" || value === "separate-relay") return value;
+  throw new Error(`Unsupported ghost tunnel adapter strategy: ${String(value)}`);
+}
+
+function parseGhostTunnelTransportKind(value: GhostTunnelTransportKind | undefined) {
+  if (typeof value === "undefined") return DEFAULT_GHOST_TUNNEL_TRANSPORT_KIND;
+  if (value === "none" || value === "ip" || value === "tunnel") return value;
+  throw new Error(`Unsupported ghost tunnel transport: ${String(value)}`);
+}
+
+function resolveGhostTunnelAdapter(
+  input: GhostTunnelAdapterOptions | GhostTunnelLegacyAdapterOptions | GhostTunnelConfig["adapter"] | undefined
+): GhostTunnelConfig["adapter"] {
+  if (!input) return undefined;
+
+  const provider = typeof input === "string" ? input : input.provider;
+  if (provider !== "vercel") {
+    throw new Error(`Unsupported ghost tunnel adapter provider: ${String(provider)}`);
+  }
+
+  return {
+    provider,
+    strategy: typeof input === "string" ? DEFAULT_GHOST_TUNNEL_ADAPTER_STRATEGY : parseGhostTunnelAdapterStrategy(input.strategy)
+  };
+}
+
+function getLegacyGhostTunnelTransport(
+  input: GhostTunnelAdapterOptions | GhostTunnelLegacyAdapterOptions | GhostTunnelConfig["adapter"] | undefined
+) {
+  if (!input || typeof input === "string" || !("transport" in input)) return undefined;
+  return input.transport;
+}
+
+function resolveGhostTunnelTransport(
+  input: GhostTunnelTransportOptions | GhostTunnelTransportConfig | undefined
+): GhostTunnelTransportConfig {
+  if (!input) {
+    return { kind: DEFAULT_GHOST_TUNNEL_TRANSPORT_KIND };
+  }
+
+  return {
+    kind: typeof input === "string"
+      ? parseGhostTunnelTransportKind(input)
+      : parseGhostTunnelTransportKind(input.kind)
+  };
 }
 
 function resolveNamespaceConfig(options: GhostTunnelNamespaceOptions | undefined): GhostTunnelNamespaceConfig {
@@ -343,7 +425,8 @@ export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined
       namespace: resolveNamespaceConfig(undefined),
       displayUrls: [],
       requireHttps: true,
-      requireAuth: true
+      requireAuth: true,
+      transport: resolveGhostTunnelTransport(undefined)
     };
   }
 
@@ -354,6 +437,8 @@ export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined
   assertValidSubdomain(subdomain);
   const domains = normalizeDomains(config.domains);
   const enabled = config.enabled ?? true;
+  const adapter = resolveGhostTunnelAdapter(config.adapter);
+  const transport = resolveGhostTunnelTransport(config.transport ?? getLegacyGhostTunnelTransport(config.adapter));
 
   const resolved: GhostTunnelConfig = {
     enabled,
@@ -364,7 +449,9 @@ export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined
     ...(config.preview ? { preview: config.preview } : {}),
     displayUrls: [],
     requireHttps: config.requireHttps ?? true,
-    requireAuth: config.requireAuth ?? true
+    requireAuth: config.requireAuth ?? true,
+    transport,
+    ...(adapter ? { adapter } : {})
   };
 
   if (!enabled) {

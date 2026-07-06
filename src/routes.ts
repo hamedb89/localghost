@@ -91,7 +91,7 @@ export function formatGhostTunnel(config: GhostTunnelConfig, options: GhostTunne
   if (options.verbose) {
     lines.push(`  domains: ${config.domains.length > 0 ? config.domains.join(", ") : "*"}`);
     lines.push(`  access: ${config.requireAuth ? "auth required" : "app decides"}`);
-    lines.push(`  transport: ${config.requireHttps ? "https required" : "http allowed"}`);
+    lines.push(`  protocol: ${config.requireHttps ? "https required" : "http allowed"}`);
   }
 
   return lines.join("\n");

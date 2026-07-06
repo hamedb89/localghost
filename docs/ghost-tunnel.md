@@ -20,7 +20,9 @@ import { defineLocalghostConfig } from "@hamedb89/localghost";
 export default defineLocalghostConfig({
   ghostTunnel: {
     domains: "moonlit-otter.example",
-    mode: "manual"
+    mode: "manual",
+    adapter: "vercel",
+    transport: "none"
   }
 });
 ```
@@ -51,6 +53,32 @@ localghost ghost tunnel
   configured: https://<route>-<project>-<owner>.ghost.moonlit-otter.example/
 ```
 
+The adapter describes where the wildcard ingress runs. The transport describes how that deployed ingress would reach your local machine. The thinnest current path is the same-project Vercel adapter with no public-to-local transport yet:
+
+```js
+export default defineLocalghostConfig({
+  ghostTunnel: {
+    domains: "copper-comet.example",
+    mode: "public",
+    requireAuth: false,
+    adapter: {
+      provider: "vercel",
+      strategy: "same-project"
+    },
+    transport: "none"
+  }
+});
+```
+
+`transport: "none"` means the wildcard host is intercepted by the deployed app and resolved against `.ghosttunnel`, but no live public-to-local stream is established yet. This is the right first slice for proving routing, exact-host lookup, and response semantics before adding a real transport.
+
+The split is intentional:
+
+- `adapter`: where ingress lives, for example the same Vercel project or a separate relay app.
+- `transport`: how public traffic gets back to your local machine.
+
+Today only `transport: "none"` is implemented. The contract leaves room for future `ip` and `tunnel` transports without overloading the deployment adapter.
+
 Use object form to override defaults or provide a concrete preview URL:
 
 ```js
@@ -71,9 +99,49 @@ export default defineLocalghostConfig({
 1. Add `ghostTunnel: { domains: "your-domain.com" }`, `ghostTunnel: "manual"`, or `ghostTunnel.preview` to `localghost.config.mjs`.
 2. Point the wildcard DNS record for `*.ghost.<your-domain>` at the deployed app.
 3. Route `*.ghost.<your-domain>` to the same production app that serves the Vite build.
-4. In production request handling, read the Localghost project config without resolving local `.localghost` setup.
-5. Construct tunnel URLs from `route`, `project`, and `owner`.
-6. Validate the incoming request host, protocol, and auth before serving the tunnel surface.
+4. Add a same-project ingress handler that intercepts the wildcard host before the static app shell.
+5. In that handler, read the Localghost project config without resolving local `.localghost` setup.
+6. Construct tunnel URLs from `route`, `project`, and `owner`.
+7. Validate the incoming request host, protocol, and auth before serving the tunnel surface.
+
+## Exact Route File
+
+Use `.ghosttunnel` as the exact-host companion to `.localghost`:
+
+```txt
+decisionlayer-decision-layer-hamedbahrami.ghost.copper-comet.example 5173
+notes-decision-layer-hamedbahrami.ghost.copper-comet.example 4173
+```
+
+The format matches `.localghost`: one exact host and one local port per line. Localghost exposes `readGhostTunnelEntries()`, `findGhostTunnelEntry()`, and `resolveGhostTunnelRequest()` so a same-project ingress handler can parse the wildcard host and look up its exact local target without inventing a second config format.
+
+## Same-Project Vercel Handler
+
+For a drop-in Vite app on Vercel, connect `*.ghost.<your-domain>` to the same project, then rewrite ghost hosts into a function instead of the static app:
+
+```json
+{
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "(.*)\\.ghost\\.copper-comet\\.example" }],
+      "destination": "/api/ghost"
+    }
+  ]
+}
+```
+
+Then the handler can resolve the request and return a safe relay status:
+
+```ts
+import { createVercelGhostTunnelHandler } from "@hamedb89/localghost";
+
+export default createVercelGhostTunnelHandler({
+  cwd: process.cwd(),
+  domain: "copper-comet.example",
+  authenticated: false
+});
+```
 
 ## Vercel DNS
 

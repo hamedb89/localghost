@@ -7,6 +7,7 @@ const {
   constructGhostTunnelHost,
   constructGhostTunnelURL,
   constructGhostTunnelUrl,
+  formatGhostTunnel,
   getGhostTunnelDefaultDisplayUrl,
   getGhostTunnelDisplayUrl,
   getGhostTunnelDisplayUrls,
@@ -267,6 +268,71 @@ test("uses defaults for public Ghost Tunnel display when domains are configured"
   });
 
   assert.equal(preview.displayUrl, "https://decisionlayer-decision-layer-hamedbahrami.ghost.copper-comet.example/");
+});
+
+test("normalizes ghost tunnel adapter defaults for thin platform handlers", () => {
+  const config = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example",
+    adapter: "vercel"
+  });
+
+  assert.deepEqual(config.adapter, {
+    provider: "vercel",
+    strategy: "same-project"
+  });
+  assert.deepEqual(config.transport, {
+    kind: "none"
+  });
+});
+
+test("separates transport from adapter while accepting the older nested shape", () => {
+  const nextConfig = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example",
+    adapter: {
+      provider: "vercel",
+      strategy: "same-project"
+    },
+    transport: "ip"
+  });
+
+  assert.deepEqual(nextConfig.adapter, {
+    provider: "vercel",
+    strategy: "same-project"
+  });
+  assert.deepEqual(nextConfig.transport, {
+    kind: "ip"
+  });
+
+  const legacyConfig = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example",
+    adapter: {
+      provider: "vercel",
+      transport: "tunnel"
+    }
+  });
+
+  assert.deepEqual(legacyConfig.transport, {
+    kind: "tunnel"
+  });
+});
+
+test("labels HTTPS policy as protocol in verbose ghost tunnel output", () => {
+  const config = resolveGhostTunnelConfig({
+    mode: "public",
+    domains: "copper-comet.example"
+  }, {
+    route: "decisionlayer",
+    project: "decision-layer",
+    owner: "hamedbahrami"
+  });
+
+  const formatted = formatGhostTunnel(config, { verbose: true });
+
+  assert.match(formatted, /protocol: https required/);
+  assert.doesNotMatch(formatted, /\n  transport: https required/);
 });
 
 test("keeps disabled Ghost Tunnel domains without displaying routes", () => {
