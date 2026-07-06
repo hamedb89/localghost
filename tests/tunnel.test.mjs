@@ -7,7 +7,10 @@ const {
   constructGhostTunnelHost,
   constructGhostTunnelURL,
   constructGhostTunnelUrl,
+  getGhostTunnelDefaultDisplayUrl,
+  getGhostTunnelDisplayUrl,
   getGhostTunnelWildcardHost,
+  getGhostTunnelPreviewUrl,
   parseGhostTunnelHost,
   resolveGhostTunnelConfig
 } = await importLocalghost();
@@ -165,4 +168,40 @@ test("documents the production wildcard host without making it a route claim", (
     getGhostTunnelWildcardHost("moonlit-otter.example", true),
     "*.ghost.moonlit-otter.example"
   );
+});
+
+test("resolves configured preview URLs for logs", () => {
+  const config = resolveGhostTunnelConfig({
+    preview: {
+      domain: "moonlit-otter.example",
+      route: "plan",
+      project: "summer-base",
+      owner: "hamed"
+    }
+  });
+
+  assert.equal(config.previewUrl, "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
+  assert.equal(config.displayUrl, "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
+  assert.equal(getGhostTunnelPreviewUrl(config), "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
+  assert.equal(getGhostTunnelDisplayUrl(config), "https://plan-summer-base-hamed.ghost.moonlit-otter.example/");
+  assert.equal(getGhostTunnelPreviewUrl(true), null);
+});
+
+test("logs default display templates when ghostTunnel is true or object-only", () => {
+  const defaults = resolveGhostTunnelConfig(true);
+
+  assert.equal(defaults.displayUrl, "https://<route>-<project>-<owner>.ghost.<domain>/");
+  assert.equal(getGhostTunnelDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
+  assert.equal(getGhostTunnelDefaultDisplayUrl(true), "https://<route>-<project>-<owner>.ghost.<domain>/");
+
+  const custom = resolveGhostTunnelConfig({
+    subdomain: "preview",
+    namespace: {
+      tags: ["owner", "project", "route"],
+      spreadTag: "project"
+    }
+  });
+
+  assert.equal(custom.displayUrl, "https://<owner>-<project>-<route>.preview.<domain>/");
+  assert.equal(getGhostTunnelPreviewUrl(custom), null);
 });

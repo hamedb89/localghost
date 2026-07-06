@@ -131,6 +131,8 @@ The production flow is DNS wildcard -> `constructGhostTunnelUrl` -> deployed app
 
 Relay registration is local-agent-only: signed exact-host claims, explicit local targets, private access by default, no arbitrary URL proxy endpoint, and safe offline behavior when the agent disconnects.
 
+When `ghostTunnel: true` is configured, route and Vite startup logs print the default template. When `ghostTunnel.preview` is configured, they print the concrete preview URL.
+
 ## Reset For Testing
 
 As a developer, I want to retest setup without deleting my project config.

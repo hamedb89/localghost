@@ -60,7 +60,10 @@ export {
   constructGhostTunnelHost,
   constructGhostTunnelURL,
   constructGhostTunnelUrl,
+  getGhostTunnelDefaultDisplayUrl,
+  getGhostTunnelDisplayUrl,
   getGhostTunnelEntryHost,
+  getGhostTunnelPreviewUrl,
   getGhostTunnelWildcardHost,
   parseGhostTunnelHost,
   resolveGhostTunnelConfig
@@ -113,6 +116,7 @@ export type {
   GhostTunnelNamespaceTag,
   GhostTunnelNamespaceValues,
   GhostTunnelOptions,
+  GhostTunnelPreviewOptions,
   GhostTunnelRoute
 } from "./tunnel.js";
 export type { LocalghostEnvironment } from "./env.js";

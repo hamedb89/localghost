@@ -22,9 +22,30 @@ export default defineLocalghostConfig({
 });
 ```
 
+With `true`, route output and Vite startup output show the default template:
+
+```txt
+ghostTunnel running on https://<route>-<project>-<owner>.ghost.<domain>/
+```
+
+Use object form to override defaults or provide a concrete preview URL:
+
+```js
+export default defineLocalghostConfig({
+  ghostTunnel: {
+    preview: {
+      domain: "moonlit-otter.example",
+      route: "plan",
+      project: "summer-base",
+      owner: "hamed"
+    }
+  }
+});
+```
+
 ## Flow
 
-1. Add `ghostTunnel: true` to `localghost.config.mjs`.
+1. Add `ghostTunnel: true` or `ghostTunnel.preview` to `localghost.config.mjs`.
 2. Point the wildcard DNS record for `*.ghost.<your-domain>` at the deployed app.
 3. Route `*.ghost.<your-domain>` to the same production app that serves the Vite build.
 4. In production request handling, read the Localghost project config without resolving local `.localghost` setup.
@@ -58,6 +79,12 @@ const route = assertSecureGhostTunnelRequest({
 
 // url is https://plan-summer-base-hamed.ghost.moonlit-otter.example/
 // route.namespace is { route: "plan", project: "summer-base", owner: "hamed" }.
+```
+
+When `ghostTunnel.preview` is configured, Localghost logs the concrete preview URL in route output and Vite startup output:
+
+```txt
+ghostTunnel running on https://plan-summer-base-hamed.ghost.moonlit-otter.example/
 ```
 
 When the app is behind a trusted deployment proxy, derive `protocol` from the platform's trusted request metadata. Do not trust arbitrary forwarded headers unless the platform has already normalized them.

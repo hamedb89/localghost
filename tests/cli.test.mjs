@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import test from "node:test";
 import { importLocalghost } from "./_localghost.mjs";
@@ -59,4 +62,38 @@ test("relay registration remains a library guard, not public CLI target selectio
     }),
     /explicit local target object/
   );
+});
+
+test("routes CLI logs configured Ghost Tunnel preview URL", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-routes-"));
+  await writeFile(join(cwd, ".localghost"), "app.localhost 5173\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), [
+    "export default {",
+    "  ghostTunnel: {",
+    "    preview: {",
+    "      domain: 'moonlit-otter.example',",
+    "      route: 'plan',",
+    "      project: 'summer-base',",
+    "      owner: 'hamed'",
+    "    }",
+    "  }",
+    "};",
+    ""
+  ].join("\n"));
+
+  const { stdout } = await runCli(["routes", "--cwd", cwd]);
+
+  assert.match(stdout, /http:\/\/app\.localhost\//);
+  assert.match(stdout, /ghostTunnel running on https:\/\/plan-summer-base-hamed\.ghost\.moonlit-otter\.example\//);
+});
+
+test("routes CLI logs default Ghost Tunnel template when enabled with true", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-routes-default-"));
+  await writeFile(join(cwd, ".localghost"), "app.localhost 5173\n");
+  await writeFile(join(cwd, "localghost.config.mjs"), "export default { ghostTunnel: true };\n");
+
+  const { stdout } = await runCli(["routes", "--cwd", cwd]);
+
+  assert.match(stdout, /http:\/\/app\.localhost\//);
+  assert.match(stdout, /ghostTunnel running on https:\/\/<route>-<project>-<owner>\.ghost\.<domain>\//);
 });

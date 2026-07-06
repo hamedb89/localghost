@@ -38,8 +38,11 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   }
 }
 
-function logDomainRoutes(entries: ReturnType<typeof readDevHosts>, options: { https?: boolean } = {}) {
+function logDomainRoutes(entries: ReturnType<typeof readDevHosts>, options: { https?: boolean; ghostTunnelUrl?: string | undefined } = {}) {
   console.log(formatDomainRoutes(entries, options));
+  if (options.ghostTunnelUrl) {
+    console.log(`ghostTunnel running on ${options.ghostTunnelUrl}`);
+  }
 }
 
 function parsePort(value: string) {
@@ -564,7 +567,7 @@ program
     const entries = context.entries;
 
     warnAboutLocalMdns(entries);
-    logDomainRoutes(entries, { https });
+    logDomainRoutes(entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
 
     explainHostsPassword();
     const hostsResult = await updateSystemHosts(projectName, entries);
@@ -625,7 +628,7 @@ program
     }
 
     warnAboutLocalMdns(context.entries);
-    logDomainRoutes(context.entries, { https: true });
+    logDomainRoutes(context.entries, { https: true, ghostTunnelUrl: context.ghostTunnel.displayUrl });
     explainTrustPassword();
 
     const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https: true });
@@ -789,6 +792,9 @@ program
     const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
     warnAboutLocalMdns(context.entries);
     console.log(formatDomainRoutes(context.entries, { https: options.http ? false : context.https }));
+    if (context.ghostTunnel.displayUrl) {
+      console.log(`ghostTunnel running on ${context.ghostTunnel.displayUrl}`);
+    }
   });
 
 program
@@ -856,7 +862,7 @@ program
     }
 
     warnAboutLocalMdns(readiness.entries);
-    logDomainRoutes(readiness.entries, { https });
+    logDomainRoutes(readiness.entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
 
     const caddyfile = await writeCaddyfile(readiness.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);
@@ -953,7 +959,7 @@ program
     }
 
     warnAboutLocalMdns(context.entries);
-    logDomainRoutes(context.entries, { https });
+    logDomainRoutes(context.entries, { https, ghostTunnelUrl: context.ghostTunnel.displayUrl });
 
     const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https });
     await validateCaddyfile(caddyfile);

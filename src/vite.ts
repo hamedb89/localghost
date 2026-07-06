@@ -57,7 +57,12 @@ function getDisplayEntries(entries: DevHostEntry[], vitePort: number | undefined
   return matchingEntries.length > 0 ? matchingEntries : entries;
 }
 
-function printLocalHosts(server: ViteDevServer, entries: DevHostEntry[], vitePort: number | undefined, https: boolean) {
+function printLocalHosts(server: ViteDevServer, context: LocalghostContext | undefined) {
+  if (!context) return;
+
+  const entries = context.entries;
+  const vitePort = context.port;
+  const https = context.https;
   const displayEntries = getDisplayEntries(entries, vitePort);
   const protocol = https ? "https" : "http";
   const urls = displayEntries.map((entry) => `${protocol}://${entry.host}/`);
@@ -73,7 +78,8 @@ function printLocalHosts(server: ViteDevServer, entries: DevHostEntry[], vitePor
     `  local:  ${primaryUrl}`,
     ...urls.slice(1).map((url) => `  also:   ${url}`),
     vitePort ? `  target: http://127.0.0.1:${vitePort}/` : undefined,
-    https ? "  proxy:  Caddy local HTTPS" : undefined
+    https ? "  proxy:  Caddy local HTTPS" : undefined,
+    context.ghostTunnel.displayUrl ? `  ghostTunnel running on ${context.ghostTunnel.displayUrl}` : undefined
   ].filter((line): line is string => Boolean(line));
 
   server.config.logger.info(lines.join("\n"), {
@@ -337,7 +343,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
 
       if (options.log !== false) {
         server.printUrls = () => {
-          printLocalHosts(server, resolvedEntries, resolvedVitePort, resolvedHttps);
+          printLocalHosts(server, resolvedContext);
         };
       }
 

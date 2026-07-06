@@ -20,9 +20,20 @@ export type GhostTunnelNamespaceValues = Record<string, string> & {
   owner?: string;
 };
 
+export type GhostTunnelPreviewOptions = {
+  domain: string;
+  route: string;
+  project: string;
+  owner: string;
+  values?: GhostTunnelNamespaceValues;
+  path?: string;
+  protocol?: "http" | "https";
+};
+
 export type GhostTunnelOptions = boolean | {
   subdomain?: string;
   namespace?: GhostTunnelNamespaceOptions;
+  preview?: GhostTunnelPreviewOptions;
   requireHttps?: boolean;
   requireAuth?: boolean;
 };
@@ -31,6 +42,9 @@ export type GhostTunnelConfig = {
   enabled: boolean;
   subdomain: string;
   namespace: GhostTunnelNamespaceConfig;
+  preview?: GhostTunnelPreviewOptions;
+  previewUrl?: string;
+  displayUrl?: string;
   requireHttps: boolean;
   requireAuth: boolean;
 };
@@ -174,6 +188,10 @@ function createNamespaceSlug(config: GhostTunnelNamespaceConfig, values: GhostTu
   return slug;
 }
 
+function createNamespaceTemplate(config: GhostTunnelNamespaceConfig) {
+  return config.tags.map((tag) => `<${tag}>`).join(config.separator);
+}
+
 function parseNamespaceSlug(slug: string, config: GhostTunnelNamespaceConfig): GhostTunnelNamespaceValues | null {
   const parts = slug.split(config.separator);
   if (parts.length < config.tags.length) return null;
@@ -212,12 +230,20 @@ export function resolveGhostTunnelConfig(options: GhostTunnelOptions | undefined
   const subdomain = config.subdomain ?? DEFAULT_GHOST_TUNNEL_SUBDOMAIN;
   assertValidSubdomain(subdomain);
 
-  return {
+  const resolved: GhostTunnelConfig = {
     enabled: true,
     subdomain,
     namespace: resolveNamespaceConfig(config.namespace),
+    ...(config.preview ? { preview: config.preview } : {}),
     requireHttps: config.requireHttps ?? true,
     requireAuth: config.requireAuth ?? true
+  };
+  const previewUrl = config.preview ? constructGhostTunnelUrl({ ...config.preview, ghostTunnel: resolved }) : undefined;
+
+  return {
+    ...resolved,
+    displayUrl: previewUrl ?? `https://${createNamespaceTemplate(resolved.namespace)}.${resolved.subdomain}.<domain>/`,
+    ...(previewUrl ? { previewUrl } : {})
   };
 }
 
@@ -275,6 +301,24 @@ export function constructGhostTunnelUrl(input: ConstructGhostTunnelUrlInput) {
 }
 
 export const constructGhostTunnelURL = constructGhostTunnelUrl;
+
+export function getGhostTunnelDefaultDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig = true) {
+  const config = toGhostTunnelConfig(options);
+  if (!config.enabled) return null;
+  return `https://${createNamespaceTemplate(config.namespace)}.${config.subdomain}.<domain>/`;
+}
+
+export function getGhostTunnelDisplayUrl(options: GhostTunnelOptions | GhostTunnelConfig | undefined) {
+  const config = toGhostTunnelConfig(options);
+  if (!config.enabled) return null;
+  return config.displayUrl ?? config.previewUrl ?? getGhostTunnelDefaultDisplayUrl(config);
+}
+
+export function getGhostTunnelPreviewUrl(options: GhostTunnelOptions | GhostTunnelConfig | undefined) {
+  const config = toGhostTunnelConfig(options);
+  if (!config.enabled) return null;
+  return config.previewUrl ?? (config.preview ? constructGhostTunnelUrl({ ...config.preview, ghostTunnel: config }) : null);
+}
 
 export function parseGhostTunnelHost(host: string, domain: string, options: GhostTunnelOptions | GhostTunnelConfig = true): GhostTunnelRoute | null {
   const config = toGhostTunnelConfig(options);
