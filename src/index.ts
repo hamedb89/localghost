@@ -29,6 +29,29 @@ export {
   readGhostTunnelEntries,
   resolveGhostTunnelPath
 } from "./ghost-file.js";
+export {
+  serveGhostTunnelLocalRequest,
+  startGhostTunnelAgent
+} from "./ghost-agent.js";
+export {
+  constructGhostTunnelIpUrl,
+  DEFAULT_GHOST_TUNNEL_IP_TRANSPORT_TTL_SECONDS,
+  DEFAULT_GHOST_TUNNEL_TRANSPORT_QUERY_PARAM,
+  resolveGhostTunnelIpRedirect,
+  signGhostTunnelIpTransportClaim,
+  verifyGhostTunnelIpTransportClaim
+} from "./ghost-transport.js";
+export {
+  createGhostTunnelQueuedRequest,
+  createGhostTunnelRouteHeartbeat,
+  createMemoryGhostTunnelStore,
+  createRedisGhostTunnelStore,
+  createRedisGhostTunnelStoreFromEnv,
+  decodeGhostTunnelBody,
+  DEFAULT_GHOST_TUNNEL_RESPONSE_TTL_SECONDS,
+  encodeGhostTunnelBody,
+  resolveRedisGhostTunnelEnv
+} from "./ghost-tunnel-store.js";
 export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 export {
   renderGhostTunnelRelayOfflineResponse,
@@ -110,6 +133,27 @@ export type {
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
 export type { CaddyModeOptions } from "./caddy.js";
 export type { ReadGhostTunnelOptions } from "./ghost-file.js";
+export type {
+  GhostTunnelAgent,
+  GhostTunnelAgentOptions,
+  ServeGhostTunnelLocalRequestInput
+} from "./ghost-agent.js";
+export type {
+  ConstructGhostTunnelIpUrlInput,
+  GhostTunnelIpTransportClaim,
+  ResolvedGhostTunnelIpRedirect,
+  ResolveGhostTunnelIpRedirectInput,
+  SignedGhostTunnelIpTransportClaim
+} from "./ghost-transport.js";
+export type {
+  GhostTunnelQueuedRequest,
+  GhostTunnelQueuedResponse,
+  GhostTunnelRouteHeartbeat,
+  GhostTunnelStore,
+  GhostTunnelStoreEnv,
+  RedisGhostTunnelEnvResolution,
+  RedisGhostTunnelStoreOptions
+} from "./ghost-tunnel-store.js";
 export type { GhostTunnelHttpResponse, ResolveGhostTunnelRequestInput, ResolvedGhostTunnelRequest } from "./ghost-request.js";
 export type { LocalghostContext, LocalghostContextOptions, LocalghostProjectConfig, LocalghostProjectConfigResult } from "./context.js";
 export type { DoctorResult } from "./doctor.js";
@@ -141,6 +185,9 @@ export type {
   GhostTunnelNamespaceValues,
   GhostTunnelOptions,
   GhostTunnelPreviewOptions,
+  GhostTunnelTunnelStoreEnv,
+  GhostTunnelTunnelStoreOptions,
+  GhostTunnelTunnelStoreProvider,
   GhostTunnelTransportConfig,
   GhostTunnelTransportKind,
   GhostTunnelTransportOptions,

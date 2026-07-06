@@ -38,14 +38,53 @@ export type GhostTunnelAdapterProvider = "vercel";
 export type GhostTunnelAdapterStrategy = "same-project" | "separate-relay";
 export type GhostTunnelTransportKind = "none" | "ip" | "tunnel";
 export type GhostTunnelAdapterTransport = GhostTunnelTransportKind;
+export type GhostTunnelTunnelStoreProvider = "vercel-redis" | "redis";
+export type GhostTunnelTunnelStoreEnv = "auto";
 
-export type GhostTunnelTransportOptions = GhostTunnelTransportKind | {
-  kind?: GhostTunnelTransportKind;
+export type GhostTunnelTunnelStoreOptions = {
+  provider?: GhostTunnelTunnelStoreProvider;
+  env?: GhostTunnelTunnelStoreEnv;
+  namespace?: string;
 };
 
-export type GhostTunnelTransportConfig = {
-  kind: GhostTunnelTransportKind;
-};
+export type GhostTunnelTransportOptions =
+  | GhostTunnelTransportKind
+  | {
+    kind?: "none";
+  }
+  | {
+    kind: "ip";
+    allowPrivateNetworkAddress?: boolean;
+  }
+  | {
+    kind: "tunnel";
+    store?: GhostTunnelTunnelStoreOptions;
+    waitMs?: number;
+    pollIntervalMs?: number;
+    routeTtlSeconds?: number;
+    requestTtlSeconds?: number;
+    maxRequestBodyBytes?: number;
+    maxResponseBodyBytes?: number;
+  };
+
+export type GhostTunnelTransportConfig =
+  | {
+    kind: "none";
+  }
+  | {
+    kind: "ip";
+    allowPrivateNetworkAddress: boolean;
+  }
+  | {
+    kind: "tunnel";
+    store: Required<Pick<GhostTunnelTunnelStoreOptions, "provider" | "env" | "namespace">>;
+    waitMs: number;
+    pollIntervalMs: number;
+    routeTtlSeconds: number;
+    requestTtlSeconds: number;
+    maxRequestBodyBytes: number;
+    maxResponseBodyBytes: number;
+  };
 
 export type GhostTunnelAdapterOptions = GhostTunnelAdapterProvider | {
   provider: GhostTunnelAdapterProvider;
@@ -119,6 +158,15 @@ const DEFAULT_GHOST_TUNNEL_NAMESPACE_SEPARATOR = "-";
 const DEFAULT_GHOST_TUNNEL_MODE: GhostTunnelMode = "manual";
 const DEFAULT_GHOST_TUNNEL_ADAPTER_STRATEGY: GhostTunnelAdapterStrategy = "same-project";
 const DEFAULT_GHOST_TUNNEL_TRANSPORT_KIND: GhostTunnelTransportKind = "none";
+const DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_PROVIDER: GhostTunnelTunnelStoreProvider = "vercel-redis";
+const DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_ENV: GhostTunnelTunnelStoreEnv = "auto";
+const DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_NAMESPACE = "localghost";
+const DEFAULT_GHOST_TUNNEL_TUNNEL_WAIT_MS = 25_000;
+const DEFAULT_GHOST_TUNNEL_TUNNEL_POLL_INTERVAL_MS = 250;
+const DEFAULT_GHOST_TUNNEL_TUNNEL_ROUTE_TTL_SECONDS = 30;
+const DEFAULT_GHOST_TUNNEL_TUNNEL_REQUEST_TTL_SECONDS = 60;
+const DEFAULT_GHOST_TUNNEL_TUNNEL_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+const DEFAULT_GHOST_TUNNEL_TUNNEL_MAX_RESPONSE_BODY_BYTES = 5 * 1024 * 1024;
 
 type GhostTunnelLegacyAdapterOptions = {
   provider: GhostTunnelAdapterProvider;
@@ -200,6 +248,34 @@ function parseGhostTunnelTransportKind(value: GhostTunnelTransportKind | undefin
   throw new Error(`Unsupported ghost tunnel transport: ${String(value)}`);
 }
 
+function parsePositiveInteger(value: number | undefined, fallback: number, name: string) {
+  if (typeof value === "undefined") return fallback;
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`Invalid ghost tunnel ${name}: ${value}`);
+  }
+  return value;
+}
+
+function parseTunnelStoreProvider(value: GhostTunnelTunnelStoreProvider | undefined) {
+  if (typeof value === "undefined") return DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_PROVIDER;
+  if (value === "vercel-redis" || value === "redis") return value;
+  throw new Error(`Unsupported ghost tunnel tunnel store provider: ${String(value)}`);
+}
+
+function parseTunnelStoreEnv(value: GhostTunnelTunnelStoreEnv | undefined) {
+  if (typeof value === "undefined") return DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_ENV;
+  if (value === "auto") return value;
+  throw new Error(`Unsupported ghost tunnel tunnel store env: ${String(value)}`);
+}
+
+function parseTunnelStoreNamespace(value: string | undefined) {
+  const namespace = value ?? DEFAULT_GHOST_TUNNEL_TUNNEL_STORE_NAMESPACE;
+  if (!/^[a-z][a-z0-9:_-]{0,63}$/i.test(namespace)) {
+    throw new Error(`Invalid ghost tunnel tunnel store namespace: ${namespace}`);
+  }
+  return namespace;
+}
+
 function resolveGhostTunnelAdapter(
   input: GhostTunnelAdapterOptions | GhostTunnelLegacyAdapterOptions | GhostTunnelConfig["adapter"] | undefined
 ): GhostTunnelConfig["adapter"] {
@@ -227,14 +303,41 @@ function resolveGhostTunnelTransport(
   input: GhostTunnelTransportOptions | GhostTunnelTransportConfig | undefined
 ): GhostTunnelTransportConfig {
   if (!input) {
-    return { kind: DEFAULT_GHOST_TUNNEL_TRANSPORT_KIND };
+    return { kind: "none" };
   }
 
-  return {
-    kind: typeof input === "string"
-      ? parseGhostTunnelTransportKind(input)
-      : parseGhostTunnelTransportKind(input.kind)
-  };
+  const kind = typeof input === "string"
+    ? parseGhostTunnelTransportKind(input)
+    : parseGhostTunnelTransportKind(input.kind);
+
+  if (kind === "ip") {
+    return {
+      kind,
+      allowPrivateNetworkAddress: typeof input === "string" ? false : input.kind === "ip" ? input.allowPrivateNetworkAddress ?? false : false
+    };
+  }
+
+  if (kind === "tunnel") {
+    const config: Extract<GhostTunnelTransportOptions, { kind: "tunnel" }> | Extract<GhostTunnelTransportConfig, { kind: "tunnel" }> | undefined =
+      typeof input === "string" || input.kind !== "tunnel" ? undefined : input;
+    const store = config?.store ?? {};
+    return {
+      kind,
+      store: {
+        provider: parseTunnelStoreProvider(store.provider),
+        env: parseTunnelStoreEnv(store.env),
+        namespace: parseTunnelStoreNamespace(store.namespace)
+      },
+      waitMs: parsePositiveInteger(config?.waitMs, DEFAULT_GHOST_TUNNEL_TUNNEL_WAIT_MS, "tunnel waitMs"),
+      pollIntervalMs: parsePositiveInteger(config?.pollIntervalMs, DEFAULT_GHOST_TUNNEL_TUNNEL_POLL_INTERVAL_MS, "tunnel pollIntervalMs"),
+      routeTtlSeconds: parsePositiveInteger(config?.routeTtlSeconds, DEFAULT_GHOST_TUNNEL_TUNNEL_ROUTE_TTL_SECONDS, "tunnel routeTtlSeconds"),
+      requestTtlSeconds: parsePositiveInteger(config?.requestTtlSeconds, DEFAULT_GHOST_TUNNEL_TUNNEL_REQUEST_TTL_SECONDS, "tunnel requestTtlSeconds"),
+      maxRequestBodyBytes: parsePositiveInteger(config?.maxRequestBodyBytes, DEFAULT_GHOST_TUNNEL_TUNNEL_MAX_REQUEST_BODY_BYTES, "tunnel maxRequestBodyBytes"),
+      maxResponseBodyBytes: parsePositiveInteger(config?.maxResponseBodyBytes, DEFAULT_GHOST_TUNNEL_TUNNEL_MAX_RESPONSE_BODY_BYTES, "tunnel maxResponseBodyBytes")
+    };
+  }
+
+  return { kind: "none" };
 }
 
 function resolveNamespaceConfig(options: GhostTunnelNamespaceOptions | undefined): GhostTunnelNamespaceConfig {

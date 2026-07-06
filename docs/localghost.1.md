@@ -15,6 +15,7 @@ localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
+localghost tunnel [--cwd path] [--config file] [--config-pattern regex] [--ghost-config file] [--target-host host]
 localghost update [--json]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust] [--dynamic-port] -- command
@@ -112,6 +113,16 @@ localghost ps
 localghost ps --json
 ```
 
+### tunnel
+
+Runs the local Ghost Tunnel agent for `ghostTunnel.transport: "tunnel"`. The command reads the Localghost project config, reads exact public hosts from `.ghosttunnel`, sends route heartbeats to the configured Redis REST store, polls for queued requests, and serves them from the matching local port.
+
+```sh
+localghost tunnel
+```
+
+Use `--ghost-config <file>` when the exact route file is not `.ghosttunnel`. Use `--target-host <host>` when the local app listens somewhere other than `127.0.0.1`.
+
 ### update
 
 Checks npm for a newer Localghost release. Pass `--json` for scripts and agents.
@@ -152,7 +163,9 @@ When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, 
 
 `ghostTunnel` does not change local Caddy or `/etc/hosts` setup. It marks `<route>-<project>-<owner>.ghost.<domain>` as a production app entrypoint. Use `ghostTunnel: { domains: "example.com", mode: "manual" }` when the production base domain is known, or omit `domains` to keep logs wildcarded as `https://<route>-<project>-<owner>.ghost.*/`. Production code can call `readLocalghostProjectConfig()`, `constructGhostTunnelUrl()`, and `assertSecureGhostTunnelRequest()` to read the flag, construct default tunnel URLs, validate the wildcard host shape, require HTTPS by default, and require an app-authenticated request by default.
 
-Relay helpers are private by default. Registration requires an authenticated local-agent bearer token plus an exact signed route claim. Targets must be explicit local host/port objects, dangerous ports are blocked, private/LAN targets require explicit opt-in, internal and hop-by-hop headers are stripped, sensitive logs are redacted, and offline agents get a safe 503 page.
+`ghostTunnel.transport` is separate from the deployment adapter. `transport: "none"` proves ingress and exact-route lookup without forwarding. `transport: "ip"` signs a direct address into the shared URL, verifies that token against the exact ghost host, and redirects to the signed address plus the local port from `.ghosttunnel`. `transport: "tunnel"` uses Redis REST env vars plus `localghost tunnel` to queue deployed requests for a local agent. For LAN or private-address IP redirects, set `transport: { kind: "ip", allowPrivateNetworkAddress: true }` explicitly.
+
+Relay helpers are private by default. Registration requires an authenticated local-agent bearer token plus an exact signed route claim. Targets must be explicit local host/port objects, dangerous ports are blocked, private/LAN targets require explicit opt-in, internal and hop-by-hop headers are stripped, sensitive logs are redacted, and offline agents get a safe 503 page. The IP transport follows the same posture: the shared URL carries only a signed `{ host, address, protocol, expiresAt }` claim, while the redirect port still comes from the exact `.ghosttunnel` entry.
 
 When `ghostTunnel` is configured, route output and Vite startup logs print the production URL shape. Manual mode can fill local defaults for `route`, `project`, and `owner`; public mode leaves those slots as `<route>`, `<project>`, and `<owner>` unless `ghostTunnel.preview` pins a concrete URL. Add `ghostTunnel.domains` to fill one or more production base domains. When `ghostTunnel.preview` is configured with `route`, `project`, and `owner`, logs print the concrete URL, inheriting `ghostTunnel.domains` unless `preview.domain` is set. In an interactive Vite terminal, press `g` to show Ghost Tunnel configuration and open a numbered concrete URL.
 

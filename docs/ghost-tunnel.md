@@ -53,7 +53,7 @@ localghost ghost tunnel
   configured: https://<route>-<project>-<owner>.ghost.moonlit-otter.example/
 ```
 
-The adapter describes where the wildcard ingress runs. The transport describes how that deployed ingress would reach your local machine. The thinnest current path is the same-project Vercel adapter with no public-to-local transport yet:
+The adapter describes where the wildcard ingress runs. The transport describes how that deployed ingress reaches your local machine. The lowest-risk smoke path is the same-project Vercel adapter with no public-to-local transport:
 
 ```js
 export default defineLocalghostConfig({
@@ -77,7 +77,26 @@ The split is intentional:
 - `adapter`: where ingress lives, for example the same Vercel project or a separate relay app.
 - `transport`: how public traffic gets back to your local machine.
 
-Today only `transport: "none"` is implemented. The contract leaves room for future `ip` and `tunnel` transports without overloading the deployment adapter.
+Today `transport: "none"`, `transport: "ip"`, and `transport: "tunnel"` are implemented. The `tunnel` transport is the drop-in shared-state version: deployed ingress queues the request in Redis, the local agent polls that queue, forwards to `127.0.0.1:<port>`, and writes the response back.
+
+`transport: "ip"` is the thinnest direct-address transport. The deployed ingress still validates the ghost host and resolves the exact route from `.ghosttunnel`, but the shared URL also carries a signed IP transport token. The handler then redirects to that address plus the configured local port. This keeps the route and port in repo truth while making the shared address explicit.
+
+For LAN or private-address use, opt in explicitly:
+
+```js
+export default defineLocalghostConfig({
+  ghostTunnel: {
+    domains: "copper-comet.example",
+    mode: "public",
+    requireAuth: false,
+    adapter: "vercel",
+    transport: {
+      kind: "ip",
+      allowPrivateNetworkAddress: true
+    }
+  }
+});
+```
 
 Use object form to override defaults or provide a concrete preview URL:
 
@@ -103,6 +122,7 @@ export default defineLocalghostConfig({
 5. In that handler, read the Localghost project config without resolving local `.localghost` setup.
 6. Construct tunnel URLs from `route`, `project`, and `owner`.
 7. Validate the incoming request host, protocol, and auth before serving the tunnel surface.
+8. For `transport: "tunnel"`, provide Redis REST env vars to the deployed handler and run `localghost tunnel` beside the local dev server.
 
 ## Exact Route File
 
@@ -131,7 +151,7 @@ For a drop-in Vite app on Vercel, connect `*.ghost.<your-domain>` to the same pr
 }
 ```
 
-Then the handler can resolve the request and return a safe relay status:
+Then the handler can resolve the request and return a safe relay status, a signed IP redirect, or a Redis-backed tunnel response:
 
 ```ts
 import { createVercelGhostTunnelHandler } from "@hamedb89/localghost";
@@ -139,9 +159,93 @@ import { createVercelGhostTunnelHandler } from "@hamedb89/localghost";
 export default createVercelGhostTunnelHandler({
   cwd: process.cwd(),
   domain: "copper-comet.example",
-  authenticated: false
+  authenticated: false,
+  ipSigningSecret: process.env.LOCALGHOST_IP_SIGNING_SECRET
 });
 ```
+
+`ipSigningSecret` is only required for `transport: "ip"`. For `transport: "tunnel"`, the handler uses the Redis REST env vars above unless you pass a custom `tunnelStore`.
+
+## Signed IP URLs
+
+Use `constructGhostTunnelIpUrl()` to create a shareable URL for `transport: "ip"`:
+
+```ts
+import { constructGhostTunnelIpUrl } from "@hamedb89/localghost";
+
+const url = constructGhostTunnelIpUrl({
+  domain: "copper-comet.example",
+  route: "decisionlayer",
+  project: "decision-layer",
+  owner: "hamedbahrami",
+  path: "/week/1",
+  address: "203.0.113.10",
+  signingSecret: process.env.LOCALGHOST_IP_SIGNING_SECRET!,
+  ghostTunnel: {
+    mode: "public",
+    domains: "copper-comet.example",
+    transport: "ip"
+  }
+});
+```
+
+That shared URL still uses the wildcard ghost host, but it also carries a signed `__localghost=...` token. The deployed handler verifies that token against the exact ghost host, reads the local port from `.ghosttunnel`, and redirects to the direct address:
+
+```txt
+https://decisionlayer-decision-layer-hamedbahrami.ghost.copper-comet.example/week/1?__localghost=...
+  -> http://203.0.113.10:5173/week/1
+```
+
+This is intentionally simple and explicit:
+
+- the repo owns the route and port through `.ghosttunnel`
+- the shared link owns the direct address
+- the deployed handler only accepts signed IP claims bound to the exact ghost host
+
+It is not a hidden reverse proxy. After redirect, the browser talks directly to the target address.
+
+## Redis Tunnel Transport
+
+Use `transport: "tunnel"` when you want the shared URL to keep going through the deployed Ghost Tunnel host instead of redirecting the browser to a direct IP address:
+
+```js
+export default defineLocalghostConfig({
+  ghostTunnel: {
+    domains: "copper-comet.example",
+    mode: "public",
+    requireAuth: false,
+    adapter: "vercel",
+    transport: {
+      kind: "tunnel",
+      store: {
+        provider: "vercel-redis",
+        env: "auto"
+      }
+    }
+  }
+});
+```
+
+`env: "auto"` reads Redis REST variables from the deployed function environment. The current lookup order is:
+
+```txt
+LOCALGHOST_REDIS_REST_URL / LOCALGHOST_REDIS_REST_TOKEN
+UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN
+KV_REST_API_URL / KV_REST_API_TOKEN
+REDIS_REST_API_URL / REDIS_REST_API_TOKEN
+```
+
+For Vercel, add a Redis Marketplace integration to the project and make sure it exposes REST URL/token variables to the Production environment. Legacy Vercel KV REST variables still work, but new projects should treat Redis as the current provider shape.
+
+Run the local agent next to your dev server:
+
+```sh
+localghost tunnel
+```
+
+The agent reads `localghost.config.mjs`, reads exact hosts from `.ghosttunnel`, sends short route heartbeats to Redis, polls for queued requests, and serves them from local ports. It does not open arbitrary targets; each public host must exist in `.ghosttunnel`.
+
+The MVP transport is polling-based and intentionally bounded. It is good for app previews and demos, not large uploads, streaming responses, or high-throughput production traffic. Defaults are a 25 second ingress wait window, 30 second route heartbeat, 60 second request TTL, 1 MiB request body cap, and 5 MiB response body cap. Override those on `transport` only when the app needs it.
 
 ## Vercel DNS
 
@@ -287,7 +391,7 @@ constructGhostTunnelUrl({
 
 ## Relay Security
 
-Localghost relay is private by default. Public requests can select a Ghost Tunnel route, but they must never select the local target URL, hostname, IP, or port. There must be no `/proxy?url=...` style endpoint.
+Localghost relay is private by default. Public requests can select a Ghost Tunnel route, but they must never select an arbitrary local target URL or port. There must be no `/proxy?url=...` style endpoint.
 
 Route registration goes through an authenticated local agent:
 
@@ -331,6 +435,20 @@ The relay helpers enforce these rules:
 - `redactRelayHeaders()` and `redactRelayLogUrl()` redact `Authorization`, `Cookie`, `Set-Cookie`, and token-like query params from logs.
 - `renderRelayOfflineResponse()` returns a safe offline page with no secrets or stack traces.
 - Vite integration continues to generate explicit `allowedHosts`; it never sets `allowedHosts: true`.
+
+For `transport: "ip"`, the handler uses a signed IP token instead of an open target selector:
+
+- `constructGhostTunnelIpUrl()` signs `{ host, address, protocol, expiresAt }`.
+- `resolveGhostTunnelIpRedirect()` rejects tampered, expired, wrong-host, or private-network claims unless private-network IPs are explicitly allowed.
+- The redirect target port still comes from the exact `.ghosttunnel` entry, not from the shared URL.
+
+For `transport: "tunnel"`, the handler uses the shared store instead of a target selector:
+
+- The deployed handler resolves the exact host from `.ghosttunnel`, then checks for a live route heartbeat.
+- The local agent only heartbeats exact hosts from `.ghosttunnel`.
+- Request and response bodies are size-limited and encoded through the store.
+- Hop-by-hop and `x-localghost-*` internal headers are stripped before forwarding.
+- If the route is missing, offline, or times out, the deployed handler returns a safe status page instead of leaking target details.
 
 Run the guardrail tests locally:
 

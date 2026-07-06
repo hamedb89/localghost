@@ -302,7 +302,8 @@ test("separates transport from adapter while accepting the older nested shape", 
     strategy: "same-project"
   });
   assert.deepEqual(nextConfig.transport, {
-    kind: "ip"
+    kind: "ip",
+    allowPrivateNetworkAddress: false
   });
 
   const legacyConfig = resolveGhostTunnelConfig({
@@ -315,7 +316,18 @@ test("separates transport from adapter while accepting the older nested shape", 
   });
 
   assert.deepEqual(legacyConfig.transport, {
-    kind: "tunnel"
+    kind: "tunnel",
+    store: {
+      provider: "vercel-redis",
+      env: "auto",
+      namespace: "localghost"
+    },
+    waitMs: 25000,
+    pollIntervalMs: 250,
+    routeTtlSeconds: 30,
+    requestTtlSeconds: 60,
+    maxRequestBodyBytes: 1024 * 1024,
+    maxResponseBodyBytes: 5 * 1024 * 1024
   });
 });
 
@@ -332,6 +344,7 @@ test("labels HTTPS policy as protocol in verbose ghost tunnel output", () => {
   const formatted = formatGhostTunnel(config, { verbose: true });
 
   assert.match(formatted, /protocol: https required/);
+  assert.match(formatted, /\n  transport: none/);
   assert.doesNotMatch(formatted, /\n  transport: https required/);
 });
 

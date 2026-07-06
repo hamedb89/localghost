@@ -130,7 +130,7 @@ export default defineLocalghostConfig({
 });
 ```
 
-The production flow is DNS wildcard -> same-project ingress handler -> `constructGhostTunnelUrl` -> deployed app auth -> `assertSecureGhostTunnelRequest` -> exact `.ghosttunnel` lookup -> transport decision. By default the helper constructs and parses `route`, `project`, and `owner` from the wildcard label before `ghost.<domain>`, requires HTTPS, and requires the app to pass `authenticated: true`. The thin built-in slice currently stops at ingress plus lookup with `transport: "none"`. See [Ghost Tunnel](./ghost-tunnel.md).
+The production flow is DNS wildcard -> same-project ingress handler -> `constructGhostTunnelUrl` -> deployed app auth -> `assertSecureGhostTunnelRequest` -> exact `.ghosttunnel` lookup -> transport decision. By default the helper constructs and parses `route`, `project`, and `owner` from the wildcard label before `ghost.<domain>`, requires HTTPS, and requires the app to pass `authenticated: true`. `transport: "none"` stops at ingress plus lookup, `transport: "ip"` accepts a signed direct-address token and redirects to that address plus the exact `.ghosttunnel` port, and `transport: "tunnel"` queues the request through Redis for a local `localghost tunnel` agent. See [Ghost Tunnel](./ghost-tunnel.md).
 
 Relay registration is local-agent-only: signed exact-host claims, explicit local targets, private access by default, no arbitrary URL proxy endpoint, and safe offline behavior when the agent disconnects.
 

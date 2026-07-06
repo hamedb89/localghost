@@ -18,6 +18,9 @@ import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, s
 import { resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
+import { listGhostTunnelEntries } from "./ghost-file.js";
+import { startGhostTunnelAgent } from "./ghost-agent.js";
+import { createRedisGhostTunnelStoreFromEnv } from "./ghost-tunnel-store.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
 import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
@@ -1043,6 +1046,67 @@ program
       stopCaddy();
       await Promise.allSettled([child, caddyExit]);
       cleanupRun();
+    }
+  });
+
+program
+  .command("tunnel")
+  .description("Run the local Ghost Tunnel agent")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--ghost-config <file>", "Exact Ghost Tunnel route file", ".ghosttunnel")
+  .option("--target-host <host>", "Local target host for .ghosttunnel ports", "127.0.0.1")
+  .action(async (options: ConfigCliOptions & { ghostConfig: string; targetHost: string }) => {
+    assertLocalDevelopment("tunnel");
+
+    const context = await resolveLocalghostContext({
+      cwd: options.cwd,
+      ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
+      ...(options.configPattern ? { configPattern: options.configPattern } : {}),
+      dynamicPort: false
+    });
+    if (!context.ghostTunnel.enabled) {
+      throw new Error("Ghost Tunnel is not enabled in localghost.config.mjs.");
+    }
+    if (context.ghostTunnel.transport.kind !== "tunnel") {
+      throw new Error(`Ghost Tunnel transport must be tunnel for localghost tunnel. Current: ${context.ghostTunnel.transport.kind}`);
+    }
+
+    const entries = listGhostTunnelEntries({
+      cwd: options.cwd,
+      fileName: options.ghostConfig
+    });
+    if (entries.length === 0) {
+      throw new Error(`No exact Ghost Tunnel routes found in ${options.ghostConfig}.`);
+    }
+
+    const transport = context.ghostTunnel.transport;
+    const store = createRedisGhostTunnelStoreFromEnv({
+      namespace: transport.store.namespace
+    });
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+
+    const agent = startGhostTunnelAgent({
+      entries,
+      store,
+      targetHost: options.targetHost,
+      routeTtlSeconds: transport.routeTtlSeconds,
+      requestTtlSeconds: transport.requestTtlSeconds,
+      pollIntervalMs: transport.pollIntervalMs,
+      maxResponseBodyBytes: transport.maxResponseBodyBytes,
+      signal: controller.signal,
+      log: (message) => console.log(message)
+    });
+
+    try {
+      await agent.done;
+    } finally {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
     }
   });
 
