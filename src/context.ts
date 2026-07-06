@@ -10,6 +10,7 @@ import {
 } from "./config.js";
 import { findAvailablePort } from "./port.js";
 import type { DevHostEntry } from "./parse.js";
+import { resolveGhostTunnelConfig, type GhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
 
 export type LocalghostContextOptions = {
   cwd?: string;
@@ -24,6 +25,7 @@ export type LocalghostContextOptions = {
   primaryHost?: string;
   dynamicPort?: boolean;
   wwwAlias?: boolean;
+  ghostTunnel?: GhostTunnelOptions;
 };
 
 export type LocalghostContext = {
@@ -42,10 +44,16 @@ export type LocalghostContext = {
   primaryHost: string;
   https: boolean;
   wwwAlias: boolean;
+  ghostTunnel: GhostTunnelConfig;
   projectConfigPath?: string;
 };
 
 export type LocalghostProjectConfig = Omit<LocalghostContextOptions, "cwd" | "localghostConfig">;
+
+export type LocalghostProjectConfigResult = {
+  config: LocalghostProjectConfig;
+  path?: string;
+};
 
 const LOCALGHOST_PROJECT_CONFIG_FILES = [
   "localghost.config.mjs",
@@ -124,12 +132,16 @@ function defined<T extends Record<string, unknown>>(input: T) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => typeof value !== "undefined")) as Partial<T>;
 }
 
-async function readProjectConfig(cwd: string, configFile: string | false | undefined) {
-  if (configFile === false) return {};
+export async function readLocalghostProjectConfig(options: {
+  cwd?: string;
+  configFile?: string | false;
+} = {}): Promise<LocalghostProjectConfigResult> {
+  const cwd = options.cwd ?? process.cwd();
+  if (options.configFile === false) return { config: {} };
 
-  const candidates = configFile ? [configFile] : LOCALGHOST_PROJECT_CONFIG_FILES;
+  const candidates = options.configFile ? [options.configFile] : LOCALGHOST_PROJECT_CONFIG_FILES;
   const path = candidates.map((candidate) => resolveDevHostsPath({ cwd, fileName: candidate }).path).find((candidate) => existsSync(candidate));
-  if (!path) return {};
+  if (!path) return { config: {} };
 
   const imported = await import(`${pathToFileURL(path).href}?localghost=${Date.now()}`);
   const config = (imported.default ?? imported) as LocalghostProjectConfig;
@@ -143,7 +155,10 @@ export function defineLocalghostConfig<T extends LocalghostContextOptions>(confi
 
 export async function resolveLocalghostContext(options: LocalghostContextOptions = {}): Promise<LocalghostContext> {
   const cwd = options.cwd ?? process.cwd();
-  const projectConfig = await readProjectConfig(cwd, options.localghostConfig);
+  const projectConfig = await readLocalghostProjectConfig({
+    cwd,
+    ...(typeof options.localghostConfig !== "undefined" ? { configFile: options.localghostConfig } : {})
+  });
   const merged = {
     ...projectConfig.config,
     ...defined(options)
@@ -183,6 +198,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     primaryHost,
     https: merged.https ?? envHttps() ?? false,
     wwwAlias,
+    ghostTunnel: resolveGhostTunnelConfig(merged.ghostTunnel),
     ...(projectConfig.path ? { projectConfigPath: projectConfig.path } : {})
   };
 }

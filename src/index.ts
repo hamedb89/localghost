@@ -22,7 +22,7 @@ export {
   sanitizeProjectName
 } from "./config.js";
 export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
-export { defineLocalghostConfig, resolveLocalghostContext } from "./context.js";
+export { defineLocalghostConfig, readLocalghostProjectConfig, resolveLocalghostContext } from "./context.js";
 export { checkCaddy, runDoctor } from "./doctor.js";
 export { assertLocalDevelopment, getProductionEnvKeys, getProductionReason, isProductionLike } from "./env.js";
 export {
@@ -38,6 +38,16 @@ export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
 export { formatDomainRoutes, getDomainRoutes } from "./routes.js";
 export { getLocalghostStatePath, LOCALGHOST_STATE_FILE, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
+export {
+  assertSecureGhostTunnelRequest,
+  constructGhostTunnelHost,
+  constructGhostTunnelURL,
+  constructGhostTunnelUrl,
+  getGhostTunnelEntryHost,
+  getGhostTunnelWildcardHost,
+  parseGhostTunnelHost,
+  resolveGhostTunnelConfig
+} from "./tunnel.js";
 export {
   checkForUpdate,
   compareVersions,
@@ -64,8 +74,18 @@ export type {
 } from "./activity.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
 export type { CaddyModeOptions } from "./caddy.js";
-export type { LocalghostContext, LocalghostContextOptions } from "./context.js";
+export type { LocalghostContext, LocalghostContextOptions, LocalghostProjectConfig, LocalghostProjectConfigResult } from "./context.js";
 export type { DoctorResult } from "./doctor.js";
+export type {
+  ConstructGhostTunnelUrlInput,
+  GhostTunnelConfig,
+  GhostTunnelNamespaceConfig,
+  GhostTunnelNamespaceOptions,
+  GhostTunnelNamespaceTag,
+  GhostTunnelNamespaceValues,
+  GhostTunnelOptions,
+  GhostTunnelRoute
+} from "./tunnel.js";
 export type { LocalghostEnvironment } from "./env.js";
 export type { InitOptions, InitResult, PackageManager } from "./init.js";
 export type { RemoveSystemHostsResult, UpdateSystemHostsResult } from "./hosts-file.js";

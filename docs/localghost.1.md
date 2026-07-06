@@ -148,7 +148,9 @@ localghost run --dynamic-port=no -- vite
 
 By default, Localghost starts at the configured port and walks upward until `127.0.0.1:<port>` is free. Pass `--dynamic-port=no` when you want strict fixed-port behavior. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
 
-When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as an override layer. Most repos can skip it; add it only for decisions like `https: true`, `dynamicPort: false`, `wwwAlias: false`, custom ports, or explicit project names.
+When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as an override layer. Most repos can skip it; add it only for decisions like `https: true`, `dynamicPort: false`, `wwwAlias: false`, custom ports, explicit project names, or the production `ghostTunnel: true` opt-in.
+
+`ghostTunnel: true` does not change local Caddy or `/etc/hosts` setup. It marks `<route>-<project>-<owner>.ghost.<domain>` as a production app entrypoint. Production code can call `readLocalghostProjectConfig()`, `constructGhostTunnelUrl()`, and `assertSecureGhostTunnelRequest()` to read the flag, construct default tunnel URLs, validate the wildcard host shape, require HTTPS by default, and require an app-authenticated request by default.
 
 `dev` and `run` register active sessions in a user-local activity file so `localghost ps` can show what is running across projects.
 

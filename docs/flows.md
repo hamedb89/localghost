@@ -117,6 +117,18 @@ The plugin defaults to HTTP. Pass `https: true` only when Vite is expected to si
 
 If `.localghost` is missing, an interactive `yarn dev` asks whether to create it, asks for the primary `.localhost` domain, allows extra domains, explains the `/etc/hosts` password prompt, and runs setup when confirmed. Non-interactive runs fail with the exact setup command instead of guessing.
 
+## Ghost Tunnel
+
+As a production app, I want one opt-in flag that makes `<route>-<project>-<owner>.ghost.<domain>` a known product entrypoint on top of the deployed Vite app, without running local Caddy or requiring the local `.localghost` file.
+
+```js
+export default defineLocalghostConfig({
+  ghostTunnel: true
+});
+```
+
+The production flow is DNS wildcard -> `constructGhostTunnelUrl` -> deployed app -> app auth -> `assertSecureGhostTunnelRequest`. By default the helper constructs and parses `route`, `project`, and `owner` from the wildcard label before `ghost.<domain>`, requires HTTPS, and requires the app to pass `authenticated: true`. See [Ghost Tunnel](./ghost-tunnel.md).
+
 ## Reset For Testing
 
 As a developer, I want to retest setup without deleting my project config.

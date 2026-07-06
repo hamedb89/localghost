@@ -98,6 +98,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
                 case .success(let runs):
                     self?.latestRuns = runs
                     self?.latestError = nil
+                    Self.publishWidgetSnapshot(runs)
                 case .failure(let error):
                     self?.latestRuns = []
                     self?.latestError = error.localizedDescription
@@ -209,7 +210,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
 
     private func showDesktopWidget() {
         if desktopPanel == nil {
-            let widgetFrame = NSRect(x: 0, y: 0, width: 360, height: 330)
+            let widgetFrame = NSRect(x: 0, y: 0, width: 380, height: 292)
             let glassView = NSVisualEffectView(frame: widgetFrame)
             glassView.material = .hudWindow
             glassView.blendingMode = .behindWindow
@@ -237,7 +238,7 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
             panel.contentView = glassView
             panel.backgroundColor = .clear
             panel.isOpaque = false
-            panel.hasShadow = true
+            panel.hasShadow = false
             panel.level = .normal
             panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
             panel.isMovableByWindowBackground = true
@@ -266,6 +267,26 @@ final class LocalghostWidgetApp: NSObject, NSApplicationDelegate {
         } catch {
             return .failure(error)
         }
+    }
+
+    private static func publishWidgetSnapshot(_ runs: [LocalghostRun]) {
+        let snapshot = LocalghostWidgetSnapshot(
+            generatedAt: ISO8601DateFormatter().string(from: Date()),
+            instances: runs.map { run in
+                LocalghostWidgetInstance(
+                    id: "\(run.projectName):\(run.cwd):\(run.mode)",
+                    projectName: run.projectName,
+                    cwd: run.cwd,
+                    running: run.isRunning,
+                    mode: run.mode,
+                    routes: run.routes.map { route in
+                        LocalghostWidgetRoute(host: route.host, port: route.port, listening: route.listening)
+                    }
+                )
+            }
+        )
+
+        try? LocalghostWidgetSharedStore.writeSnapshot(snapshot)
     }
 
     private static func loadActivityInstances() throws -> [LocalghostRun] {
@@ -426,74 +447,109 @@ final class LocalghostDesktopWidgetView: NSView {
     }
 
     private var footerRect: NSRect {
-        NSRect(x: 34, y: bounds.height - 58, width: bounds.width - 68, height: 32)
+        NSRect(x: 28, y: bounds.height - 50, width: bounds.width - 56, height: 28)
     }
 
     private func drawBackground() {
-        let rect = bounds.insetBy(dx: 4, dy: 4)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 34, yRadius: 34)
+        let rect = bounds.insetBy(dx: 6, dy: 6)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 30, yRadius: 30)
 
-        NSColor(calibratedRed: 0.05, green: 0.07, blue: 0.24, alpha: 0.34).setFill()
+        NSColor(calibratedRed: 0.05, green: 0.06, blue: 0.18, alpha: 0.58).setFill()
         path.fill()
 
         let gradient = NSGradient(colors: [
-            NSColor(calibratedRed: 0.72, green: 0.66, blue: 1.0, alpha: 0.18),
-            NSColor(calibratedRed: 0.05, green: 0.08, blue: 0.28, alpha: 0.08),
-            NSColor(calibratedRed: 0.01, green: 0.02, blue: 0.09, alpha: 0.22)
+            NSColor(calibratedRed: 0.78, green: 0.72, blue: 1.0, alpha: 0.20),
+            NSColor(calibratedRed: 0.13, green: 0.16, blue: 0.40, alpha: 0.18),
+            NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.10, alpha: 0.38)
         ])
         gradient?.draw(in: path, angle: -35)
 
-        NSColor(calibratedWhite: 1.0, alpha: 0.24).setStroke()
+        let sheen = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 29, yRadius: 29)
+        let sheenGradient = NSGradient(colors: [
+            NSColor(calibratedWhite: 1.0, alpha: 0.14),
+            NSColor(calibratedWhite: 1.0, alpha: 0.02)
+        ])
+        sheenGradient?.draw(in: sheen, angle: 90)
+
+        NSColor(calibratedWhite: 1.0, alpha: 0.18).setStroke()
         path.lineWidth = 1
         path.stroke()
 
-        let innerPath = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 33, yRadius: 33)
-        NSColor(calibratedWhite: 0.0, alpha: 0.12).setStroke()
+        let innerPath = NSBezierPath(roundedRect: rect.insetBy(dx: 1.5, dy: 1.5), xRadius: 28, yRadius: 28)
+        NSColor(calibratedWhite: 0.0, alpha: 0.18).setStroke()
         innerPath.lineWidth = 1
         innerPath.stroke()
     }
 
     private func drawHeader() {
-        drawText(">_", at: NSPoint(x: 34, y: 54), font: .monospacedSystemFont(ofSize: 28, weight: .bold), color: accent)
-        drawText("Localghost", at: NSPoint(x: 90, y: 58), font: .systemFont(ofSize: 26, weight: .bold), color: .white)
+        drawText(">_", at: NSPoint(x: 30, y: 42), font: .monospacedSystemFont(ofSize: 24, weight: .bold), color: accent)
+        drawText("Localghost", at: NSPoint(x: 83, y: 45), font: .systemFont(ofSize: 24, weight: .bold), color: .white)
 
         let status = statusText()
-        drawDot(at: NSPoint(x: 42, y: 113), radius: 5, color: statusColor)
-        drawText(status, at: NSPoint(x: 58, y: 104), font: .systemFont(ofSize: 15, weight: .medium), color: muted)
+        drawStatusPill(text: status, at: NSPoint(x: 30, y: 86))
 
-        drawDivider(y: 134)
+        drawDivider(y: 122)
     }
 
     private func drawRoutes() {
         if let errorMessage {
-            drawText("Localghost unavailable", at: NSPoint(x: 38, y: 162), font: .systemFont(ofSize: 17, weight: .semibold), color: .white)
-            drawText(errorMessage, in: NSRect(x: 38, y: 192, width: bounds.width - 76, height: 54), font: .systemFont(ofSize: 13, weight: .regular), color: muted)
+            drawText("Localghost unavailable", at: NSPoint(x: 30, y: 152), font: .systemFont(ofSize: 17, weight: .semibold), color: .white)
+            drawText(errorMessage, in: NSRect(x: 30, y: 180, width: bounds.width - 60, height: 46), font: .systemFont(ofSize: 13, weight: .regular), color: muted)
             return
         }
 
         let routes = Array(allRoutes.prefix(4))
         if routes.isEmpty {
-            drawText("No hosts online", at: NSPoint(x: 38, y: 168), font: .systemFont(ofSize: 18, weight: .semibold), color: .white)
-            drawText("Start an app with localghost run.", at: NSPoint(x: 38, y: 198), font: .systemFont(ofSize: 14, weight: .regular), color: muted)
+            drawEmptyState()
             return
         }
 
         for (index, route) in routes.enumerated() {
-            let y = CGFloat(164 + index * 48)
-            drawDot(at: NSPoint(x: 45, y: y + 10), radius: 7, color: route.listening ? online : offline)
-            drawText(route.host, at: NSPoint(x: 68, y: y), font: .systemFont(ofSize: 17, weight: .bold), color: .white)
-            drawText(String(route.port), at: NSPoint(x: bounds.width - 82, y: y), font: .monospacedDigitSystemFont(ofSize: 17, weight: .semibold), color: muted)
-            if index < routes.count - 1 {
-                drawDivider(y: y + 33)
-            }
+            drawRoute(route, index: index)
         }
     }
 
     private func drawFooter() {
         guard errorMessage == nil, let host = firstHost else { return }
-        drawDivider(y: bounds.height - 72)
-        drawText("↗", at: NSPoint(x: 38, y: bounds.height - 46), font: .systemFont(ofSize: 18, weight: .bold), color: accent)
-        drawText("Open \(host)", at: NSPoint(x: 66, y: bounds.height - 44), font: .systemFont(ofSize: 15, weight: .semibold), color: accent)
+        drawText("↗", at: NSPoint(x: 30, y: bounds.height - 40), font: .systemFont(ofSize: 16, weight: .bold), color: accent)
+        drawText("Open \(host)", at: NSPoint(x: 56, y: bounds.height - 38), font: .systemFont(ofSize: 14, weight: .semibold), color: accent)
+    }
+
+    private func drawEmptyState() {
+        let card = NSRect(x: 30, y: 148, width: bounds.width - 60, height: 82)
+        drawGlassRow(card)
+        drawText("No hosts online", at: NSPoint(x: card.minX + 16, y: card.minY + 20), font: .systemFont(ofSize: 18, weight: .semibold), color: .white)
+        drawText("Configured setups will stay here when idle.", at: NSPoint(x: card.minX + 16, y: card.minY + 52), font: .systemFont(ofSize: 13, weight: .medium), color: muted)
+    }
+
+    private func drawRoute(_ route: LocalghostRoute, index: Int) {
+        let row = NSRect(x: 30, y: CGFloat(142 + index * 38), width: bounds.width - 60, height: 32)
+        drawGlassRow(row)
+        drawDot(at: NSPoint(x: row.minX + 16, y: row.midY), radius: 5, color: route.listening ? online : offline)
+        drawText(route.host, at: NSPoint(x: row.minX + 32, y: row.minY + 7), font: .systemFont(ofSize: 14, weight: .semibold), color: .white)
+        drawText(String(route.port), at: NSPoint(x: row.maxX - 54, y: row.minY + 7), font: .monospacedDigitSystemFont(ofSize: 14, weight: .medium), color: muted)
+    }
+
+    private func drawGlassRow(_ rect: NSRect) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
+        NSColor(calibratedWhite: 1.0, alpha: 0.08).setFill()
+        path.fill()
+        NSColor(calibratedWhite: 1.0, alpha: 0.10).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    private func drawStatusPill(text: String, at point: NSPoint) {
+        let textSize = text.size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold)])
+        let rect = NSRect(x: point.x, y: point.y, width: textSize.width + 34, height: 24)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12)
+        NSColor(calibratedWhite: 1.0, alpha: 0.08).setFill()
+        path.fill()
+        NSColor(calibratedWhite: 1.0, alpha: 0.11).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+        drawDot(at: NSPoint(x: rect.minX + 12, y: rect.midY), radius: 4, color: statusColor)
+        drawText(text, at: NSPoint(x: rect.minX + 24, y: rect.minY + 4), font: .systemFont(ofSize: 13, weight: .semibold), color: muted)
     }
 
     private func statusText() -> String {
@@ -507,11 +563,11 @@ final class LocalghostDesktopWidgetView: NSView {
     }
 
     private var accent: NSColor {
-        NSColor(calibratedRed: 0.61, green: 0.43, blue: 1.0, alpha: 1)
+        NSColor(calibratedRed: 0.68, green: 0.48, blue: 1.0, alpha: 1)
     }
 
     private var online: NSColor {
-        NSColor(calibratedRed: 0.34, green: 0.91, blue: 0.52, alpha: 1)
+        NSColor(calibratedRed: 0.36, green: 0.95, blue: 0.58, alpha: 1)
     }
 
     private var offline: NSColor {
@@ -519,14 +575,14 @@ final class LocalghostDesktopWidgetView: NSView {
     }
 
     private var muted: NSColor {
-        NSColor(calibratedRed: 0.64, green: 0.63, blue: 0.79, alpha: 1)
+        NSColor(calibratedRed: 0.78, green: 0.78, blue: 0.92, alpha: 0.86)
     }
 
     private func drawDivider(y: CGFloat) {
-        NSColor(calibratedWhite: 1.0, alpha: 0.10).setStroke()
+        NSColor(calibratedWhite: 1.0, alpha: 0.12).setStroke()
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: 34, y: y))
-        path.line(to: NSPoint(x: bounds.width - 34, y: y))
+        path.move(to: NSPoint(x: 30, y: y))
+        path.line(to: NSPoint(x: bounds.width - 30, y: y))
         path.lineWidth = 1
         path.stroke()
     }

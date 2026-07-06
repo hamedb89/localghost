@@ -271,6 +271,45 @@ Then the daily script can stay small:
 
 `www.` aliases are enabled by default. A `.localghost` entry like `app.localhost 5173` also sets up `www.app.localhost` unless `wwwAlias: false` is set in `localghost.config.mjs`.
 
+`ghostTunnel: true` is the production opt-in for a wildcard product entrypoint on top of your deployed Vite app. The default namespace is `<route>-<project>-<owner>.ghost.<domain>`:
+
+```js
+import { defineLocalghostConfig } from "@hamedb89/localghost";
+
+export default defineLocalghostConfig({
+  ghostTunnel: true
+});
+```
+
+Production apps can read that flag without requiring the local `.localghost` file, then construct and validate tunnel URLs:
+
+```ts
+import {
+  assertSecureGhostTunnelRequest,
+  constructGhostTunnelUrl,
+  readLocalghostProjectConfig
+} from "@hamedb89/localghost";
+
+const { config } = await readLocalghostProjectConfig();
+const url = constructGhostTunnelUrl({
+  domain: "moonlit-otter.example",
+  route: "plan",
+  project: "summer-base",
+  owner: "hamed",
+  ghostTunnel: config.ghostTunnel
+});
+
+const route = assertSecureGhostTunnelRequest({
+  host: request.headers.get("host") ?? "",
+  domain: "moonlit-otter.example",
+  protocol: "https",
+  authenticated: Boolean(session),
+  ghostTunnel: config.ghostTunnel
+});
+```
+
+That constructs `https://plan-summer-base-hamed.ghost.moonlit-otter.example/`, validates the same host shape, requires HTTPS by default, and requires the app to confirm auth by default. See [Ghost Tunnel](./docs/ghost-tunnel.md) for the production DNS and routing flow.
+
 `localghost dev` and `localghost run` also register their active sessions in a user-local activity file. Use `localghost ps` to see the Localghost apps currently running on the machine:
 
 ```txt

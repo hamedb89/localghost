@@ -7,6 +7,7 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SOURCE_FILE="$ROOT_DIR/apps/macos-widget/LocalghostWidget.swift"
+SHARED_SOURCE_FILE="$ROOT_DIR/apps/macos-widget/Shared/LocalghostWidgetSnapshot.swift"
 SOURCE_RESOURCES_DIR="$ROOT_DIR/apps/macos-widget/Resources"
 EXECUTABLE="$MACOS_DIR/LocalghostWidget"
 MODULE_CACHE_DIR="${TMPDIR:-/tmp}/localghost-swift-module-cache"
@@ -23,6 +24,7 @@ swiftc \
   -O \
   -module-cache-path "$MODULE_CACHE_DIR" \
   -framework AppKit \
+  "$SHARED_SOURCE_FILE" \
   "$SOURCE_FILE" \
   -o "$EXECUTABLE"
 

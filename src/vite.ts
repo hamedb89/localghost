@@ -19,6 +19,7 @@ import { ask, canPrompt, confirm } from "./prompt.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 import type { DevHostEntry } from "./parse.js";
+import type { GhostTunnelOptions } from "./tunnel.js";
 
 export type LocalGhostPluginOptions = {
   cwd?: string;
@@ -34,6 +35,7 @@ export type LocalGhostPluginOptions = {
   setup?: boolean | "prompt";
   localghostConfig?: string | false;
   wwwAlias?: boolean;
+  ghostTunnel?: GhostTunnelOptions;
 };
 
 type ServerOptions = NonNullable<UserConfig["server"]>;

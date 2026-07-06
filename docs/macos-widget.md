@@ -28,6 +28,24 @@ Contents/Resources/localghost-logo-source.png
 Contents/Resources/localghost-widget-ui-reference.png
 ```
 
+## Targets
+
+The macOS widget code is split into three slices:
+
+```txt
+apps/macos-widget/LocalghostWidget.swift
+apps/macos-widget/Shared/LocalghostWidgetSnapshot.swift
+apps/macos-widget/WidgetExtension/LocalghostDesktopWidget.swift
+apps/macos-widget/project.yml
+```
+
+- `LocalghostWidget.swift`: menu-bar helper and floating glass desktop panel.
+- `Shared/LocalghostWidgetSnapshot.swift`: Codable snapshot contract shared by the helper app and WidgetKit extension.
+- `WidgetExtension/LocalghostDesktopWidget.swift`: WidgetKit extension source for a real macOS desktop widget.
+- `project.yml`: XcodeGen target definition for the containing app and the WidgetKit extension.
+
+The helper app reads Localghost's live activity file and writes a smaller snapshot to the shared widget store. The WidgetKit target reads that snapshot because system widgets run in an extension context and should not depend on shell commands or arbitrary home-directory paths.
+
 ## Run
 
 If `localghost` is installed on your shell path, launch the app bundle normally.
@@ -38,12 +56,44 @@ For source development, point the widget at the repo build:
 LOCALGHOST_CLI="$PWD/dist/cli.js" dist/LocalghostWidget.app/Contents/MacOS/LocalghostWidget
 ```
 
+## Desktop Widget Model
+
+This helper behaves like a desktop widget: it is a small glass panel that can sit on the desktop and is shown or hidden from the menu-bar icon. Install or run it like a normal macOS app, then use the Localghost icon in the top bar to show or hide the panel.
+
+The separate WidgetKit target is the source needed for a system desktop widget. To make it addable from macOS "Edit Widgets":
+
+1. Create or open an Xcode macOS app project for `LocalghostWidget`.
+2. Add `LocalghostWidget.swift`, `Shared/LocalghostWidgetSnapshot.swift`, and the resources to the app target.
+3. Add a Widget Extension target named `LocalghostDesktopWidgetExtension`.
+4. Add `WidgetExtension/LocalghostDesktopWidget.swift` and `Shared/LocalghostWidgetSnapshot.swift` to the extension target.
+5. Enable the same App Group on both targets: `group.app.localghost`.
+6. Sign and run/open the containing app once.
+7. Control-click the desktop, choose `Edit Widgets`, search for `Localghost`, and add the widget.
+
+The raw `npm run macos:widget:build` script builds only the standalone menu-bar helper. WidgetKit discovery requires the Xcode app + extension bundle/signing flow above.
+
+If XcodeGen is installed, generate the Xcode project with:
+
+```sh
+cd apps/macos-widget
+xcodegen generate
+open LocalghostWidget.xcodeproj
+```
+
+Then set your development team and App Group identifier before building/running the app from Xcode.
+
 ## Data Source
 
-The widget reads:
+The helper reads:
 
 ```txt
 ~/.local/state/localghost/activity.json
+```
+
+The helper writes the WidgetKit snapshot to the App Group container when available:
+
+```txt
+group.app.localghost/LocalghostWidgetSnapshot.json
 ```
 
 The CLI can inspect the same state with:

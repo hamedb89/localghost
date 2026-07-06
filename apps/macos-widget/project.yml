@@ -1,0 +1,40 @@
+name: LocalghostWidget
+options:
+  bundleIdPrefix: app.localghost
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+targets:
+  LocalghostWidget:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: LocalghostWidget.swift
+      - path: Shared/LocalghostWidgetSnapshot.swift
+      - path: Resources
+    entitlements:
+      path: LocalghostWidget.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.localghost.widget
+        INFOPLIST_KEY_CFBundleDisplayName: Localghost Widget
+        INFOPLIST_KEY_LSUIElement: true
+    dependencies:
+      - target: LocalghostDesktopWidgetExtension
+  LocalghostDesktopWidgetExtension:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: WidgetExtension/LocalghostDesktopWidget.swift
+      - path: Shared/LocalghostWidgetSnapshot.swift
+    entitlements:
+      path: WidgetExtension/LocalghostDesktopWidgetExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.localghost.widget.desktop-extension
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
