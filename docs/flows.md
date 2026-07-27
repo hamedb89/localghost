@@ -5,13 +5,16 @@
 As a developer, I want Localghost to be a drop-in dev dependency so I can add friendly local hostnames without rebuilding the same Caddy and hosts setup in every repo.
 
 ```sh
+npm install -D @hamedb89/localghost
+pnpm add -D @hamedb89/localghost
 yarn add -D @hamedb89/localghost
+bun add -d @hamedb89/localghost
 ```
 
-Then initialize the project contract:
+Choose the install command for the repository's package manager. Then initialize the project contract:
 
 ```sh
-yarn localghost init --write-scripts
+localghost init --write-scripts
 ```
 
 ## Project Contract
@@ -32,7 +35,7 @@ api.app.localhost 8787
 As a developer, I want to know whether my laptop is ready before Localghost changes system files.
 
 ```sh
-yarn localghost doctor
+localghost doctor
 ```
 
 Localghost checks for Caddy and prints the exact install command when it is missing. It does not run Homebrew automatically.
@@ -42,8 +45,8 @@ Localghost checks for Caddy and prints the exact install command when it is miss
 As a developer, I want to know when Localghost itself is stale without paying for a network check on every run.
 
 ```sh
-yarn localghost update
-LOCALGHOST_NO_UPDATE_CHECK=1 yarn localghost doctor
+localghost update
+LOCALGHOST_NO_UPDATE_CHECK=1 localghost doctor
 ```
 
 Localghost checks npm after successful commands, caches the result for 24 hours, and ignores check failures. `LOCALGHOST_NO_UPDATE_CHECK=1` and `--no-update-check` disable the automatic check.
@@ -53,7 +56,7 @@ Localghost checks npm after successful commands, caches the result for 24 hours,
 As a developer, I want one explicit setup command that updates only the managed Localghost block in `/etc/hosts` and validates Caddy.
 
 ```sh
-yarn localghost:setup
+localghost setup
 ```
 
 ## Daily Dev
@@ -61,8 +64,8 @@ yarn localghost:setup
 As a developer, I want a daily command that starts the local HTTP proxy from the same config file, with local HTTPS available only when I ask for it.
 
 ```sh
-yarn localghost:ready
-yarn localghost:proxy
+localghost status --ready
+localghost dev
 ```
 
 Most repos will run this next to their app server, for example Vite on `127.0.0.1:5173`.
@@ -70,7 +73,7 @@ Most repos will run this next to their app server, for example Vite on `127.0.0.
 When a repo really needs local certificates:
 
 ```sh
-yarn localghost:proxy:https
+localghost dev --https
 ```
 
 ## Config Discovery
@@ -78,9 +81,9 @@ yarn localghost:proxy:https
 As a developer, I want Localghost to fit repos that already have naming conventions without hidden file searches.
 
 ```sh
-yarn localghost print --config .localghost.preview
-yarn localghost print --config .localghost.private --config .localghost
-yarn localghost print --config-pattern '^\.localghost\.(private|preview)$'
+localghost print --config .localghost.preview
+localghost print --config .localghost.private --config .localghost
+localghost print --config-pattern '^\.localghost\.(private|preview)$'
 ```
 
 Localghost uses the first existing configured file. Regex discovery scans filenames in the project root.
@@ -90,7 +93,7 @@ Localghost uses the first existing configured file. Regex discovery scans filena
 As a developer, I want to see the local domain layer as a simple `domain -> upstream` map.
 
 ```sh
-yarn localghost routes
+localghost routes
 ```
 
 ```txt
@@ -115,7 +118,7 @@ export default {
 
 The plugin defaults to HTTP. Pass `https: true` only when Vite is expected to sit behind a Caddy HTTPS proxy. Localghost prints URLs but does not open browser tabs.
 
-If `.localghost` is missing, an interactive `yarn dev` asks whether to create it, asks for the primary `.localhost` domain, allows extra domains, explains the `/etc/hosts` password prompt, and runs setup when confirmed. Non-interactive runs fail with the exact setup command instead of guessing.
+If `.localghost` is missing, an interactive development run asks whether to create it, asks for the primary `.localhost` domain, allows extra domains, explains the `/etc/hosts` password prompt, and runs setup when confirmed. Non-interactive runs fail with the exact setup command instead of guessing.
 
 ## Ghost Tunnel
 
@@ -141,8 +144,8 @@ When `ghostTunnel` is configured, route and Vite startup logs print the producti
 As a developer, I want to retest setup without deleting my project config.
 
 ```sh
-yarn localghost reset
-yarn localghost setup
+localghost reset
+localghost setup
 ```
 
 `reset` removes only the managed hosts block, generated Caddyfile, and setup state. It leaves `.localghost` in place.
@@ -152,8 +155,8 @@ yarn localghost setup
 As a developer, I want to cleanly remove Localghost from a project when the repo is archived or no longer needs friendly hostnames.
 
 ```sh
-yarn localghost teardown
-yarn localghost teardown --remove-caddyfile
+localghost teardown
+localghost teardown --remove-caddyfile
 ```
 
 `teardown` removes only the Localghost managed `/etc/hosts` block. The generated Caddyfile is kept unless `--remove-caddyfile` is passed.
@@ -163,8 +166,8 @@ yarn localghost teardown --remove-caddyfile
 As a developer or agent, I want to see what Localghost changed without reading system files directly.
 
 ```sh
-yarn localghost status
-yarn localghost status --json
+localghost status
+localghost status --json
 ```
 
 Localghost records setup and teardown in `ops/local/localghost-state.json`. That file is project-local state, not OS temp state.
@@ -174,9 +177,9 @@ Localghost records setup and teardown in `ops/local/localghost-state.json`. That
 As a Codex or agent user, I want commands that are inspectable and scriptable without opening a browser.
 
 ```sh
-yarn localghost print
-yarn localghost doctor
-yarn localghost update
+localghost print
+localghost doctor
+localghost update
 ```
 
 The CLI reference lives in [localghost(1)](./localghost.1.md). Future flows can add MCP helpers and repo templates, but the base package should remain a small, predictable CLI.

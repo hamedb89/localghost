@@ -9,7 +9,7 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.12-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/npm/v/@hamedb89/localghost?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for clean local app domains. Add it as a dev dependency, keep running the command your team already knows, and use `http://app.localhost/` instead of remembering which port belongs to which process.
 
@@ -20,8 +20,13 @@ Localghost is a tiny Node.js CLI for clean local app domains. Add it as a dev de
 Install it as a dev dependency:
 
 ```sh
+npm install -D @hamedb89/localghost
+pnpm add -D @hamedb89/localghost
 yarn add -D @hamedb89/localghost
+bun add -d @hamedb89/localghost
 ```
+
+Use the command for your package manager; you only need one of the four lines above.
 
 For Vite apps, add the plugin once:
 
@@ -37,7 +42,7 @@ export default defineConfig({
 Then keep using the command your repo already expects:
 
 ```sh
-yarn dev
+npm exec localghost
 ```
 
 On the first interactive run, Localghost can create `.localghost`, explain the `/etc/hosts` change, write `ops/local/Caddyfile`, and print the browser-facing URL:
@@ -54,7 +59,7 @@ For non-Vite apps, wrap your raw dev command:
 ```json
 {
   "scripts": {
-    "dev": "localghost run -- yarn dev:raw",
+    "dev": "localghost run -- next dev",
     "dev:raw": "next dev"
   }
 }
@@ -218,14 +223,14 @@ admin.app.localhost 5174
 }
 ```
 
-### Keep `yarn dev` As The Daily Command
+### Keep Your Existing Dev Command
 
 Wrap the raw app server so teammates keep typing the normal command:
 
 ```json
 {
   "scripts": {
-    "dev": "localghost run -- yarn dev:raw",
+    "dev": "localghost run -- vite",
     "dev:raw": "vite"
   }
 }
@@ -236,7 +241,7 @@ For Turborepo, wrap the dev runner and keep dev uncached:
 ```json
 {
   "scripts": {
-    "dev": "localghost run -- yarn dev:raw",
+    "dev": "localghost run -- turbo dev",
     "dev:raw": "turbo dev"
   }
 }
@@ -307,7 +312,6 @@ export default defineLocalghostConfig({
   port: 5173,
   dynamicPort: true,
   autoRepair: true,
-  command: ["pnpm", "dev"],
   wwwAlias: true
 });
 ```
@@ -329,15 +333,13 @@ export default defineLocalghostConfig({
       name: "web",
       cwd: "apps/web",
       host: "xyz.localhost",
-      port: 5173,
-      command: ["pnpm", "dev"]
+      port: 5173
     },
     {
       name: "api",
       cwd: "apps/api",
       host: "api.xyz.localhost",
-      port: 8787,
-      command: ["pnpm", "dev"]
+      port: 8787
     }
   ]
 });

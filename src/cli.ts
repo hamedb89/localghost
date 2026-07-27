@@ -83,8 +83,8 @@ function parsePort(value: string) {
 }
 
 function parsePackageManager(value: string): PackageManager {
-  if (value === "npm" || value === "yarn" || value === "pnpm") return value;
-  throw new InvalidArgumentError("Package manager must be npm, yarn, or pnpm.");
+  if (value === "npm" || value === "yarn" || value === "pnpm" || value === "bun") return value;
+  throw new InvalidArgumentError("Package manager must be npm, pnpm, yarn, or bun.");
 }
 
 function collect(value: string, previous: string[] = []) {
@@ -645,7 +645,7 @@ program
   .option("--port <number>", "Primary app port", parsePort)
   .option("--api-host <host>", "API local hostname")
   .option("--api-port <number>", "API port", parsePort)
-  .option("--package-manager <npm|yarn|pnpm>", "Package manager for suggested commands", parsePackageManager)
+  .option("--package-manager <npm|pnpm|yarn|bun>", "Package manager for suggested commands", parsePackageManager)
   .option("--write-scripts", "Add localghost scripts to package.json")
   .option("--force", "Overwrite an existing config file")
   .action((options: {

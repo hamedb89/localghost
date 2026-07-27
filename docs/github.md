@@ -4,11 +4,11 @@ Use this copy for the GitHub repo About box, topics, and social cards. Keep it s
 
 ## Repository Description
 
-Friendly local hostnames for app repos. Install the dev dependency, run `yarn dev`, and get clean `.localhost` URLs with Caddy and Vite-safe hosts.
+Friendly local hostnames for app repos. Install with npm, pnpm, Yarn, or Bun and get clean `.localhost` URLs with Caddy and Vite-safe hosts.
 
 Shorter alternative:
 
-Friendly local hostnames for app repos. `yarn add -D`, `yarn dev`, ready.
+Friendly local hostnames for app repos. Add the package, run `localghost`, ready.
 
 ## Topics
 
@@ -62,7 +62,7 @@ After creating `hamedb89/localghost`, this sets the public repo metadata:
 
 ```sh
 gh repo edit hamedb89/localghost \
-  --description "Friendly local hostnames for app repos. Install the dev dependency, run yarn dev, and get clean .localhost URLs with Caddy and Vite-safe hosts." \
+  --description "Friendly local hostnames for app repos. Install with npm, pnpm, Yarn, or Bun and get clean .localhost URLs with Caddy and Vite-safe hosts." \
   --homepage "https://hamedb89.github.io/localghost/" \
   --add-topic localhost \
   --add-topic local-development \
@@ -81,7 +81,7 @@ gh repo edit hamedb89/localghost \
 The first visible paragraph should make the entrypoint feel obvious before it gets into configuration:
 
 ```txt
-Localghost is a tiny Node.js CLI for friendly local domains in app repos. Add it as a dev dependency, run `yarn dev`, and use `http://app.localhost/` instead of remembering which localhost port belongs to which process.
+Localghost is a tiny Node.js CLI for friendly local domains in app repos. Add it with your package manager, run `localghost`, and use `http://app.localhost/` instead of remembering which localhost port belongs to which process.
 ```
 
 Then the next docs layer can explain `.localghost`, Caddy, `/etc/hosts`, Vite `allowedHosts`, and configuration options.

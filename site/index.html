@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Localghost - Friendly local dev domains</title>
-    <meta name="description" content="Localghost is a tiny Node.js CLI for friendly local domains. Install the dev dependency, run yarn dev, and get clean .localhost URLs.">
+    <meta name="description" content="Localghost is a tiny package-manager-agnostic CLI for friendly local domains and clean .localhost URLs.">
     <meta property="og:title" content="Localghost">
     <meta property="og:description" content="Friendly local dev domains for app repos.">
     <meta property="og:image" content="assets/localghost-banner.png">
@@ -384,7 +384,7 @@
         <div>
           <p class="eyebrow">Buh. Friendly local dev domains.</p>
           <h1>Localghost</h1>
-          <p class="lead">A tiny Node.js CLI for the local dev flow you already use. Install the dev dependency, run <code>yarn dev</code>, and Localghost gets you to a clean browser-facing <code>.localhost</code> URL.</p>
+          <p class="lead">A tiny CLI for the local dev flow you already use. Install with npm, pnpm, Yarn, or Bun, run <code>localghost</code>, and get a clean browser-facing <code>.localhost</code> URL.</p>
           <div class="actions">
             <a class="button primary" href="https://github.com/hamedb89/localghost">View on GitHub</a>
             <a class="button secondary" href="https://www.npmjs.com/package/@hamedb89/localghost">Install from npm</a>
@@ -394,10 +394,9 @@
           <img class="mascot" src="assets/localghost-mascot.png" alt="Localghost mascot with a magic wand">
           <div class="terminal" aria-label="Localghost install example">
             <div class="terminal-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
-            <pre>yarn add -D @hamedb89/localghost
-yarn dev
-
+            <pre># install with npm, pnpm, Yarn, or Bun
 localghost
+
 local:  http://app.localhost/
 target: http://127.0.0.1:5173/</pre>
           </div>
@@ -422,8 +421,8 @@ target: http://127.0.0.1:5173/</pre>
           <h2>One small contract for local dev</h2>
           <div class="grid">
             <article class="card">
-              <h3>Yarn dev first</h3>
-              <p>Keep the command every teammate already tries first. Localghost fits behind <code>yarn dev</code> and guides the first run when setup is missing.</p>
+              <h3>Your dev flow first</h3>
+              <p>Keep the package manager and command your team already uses. Localghost detects the project flow and guides the first run when setup is missing.</p>
             </article>
             <article class="card">
               <h3>Clean defaults</h3>

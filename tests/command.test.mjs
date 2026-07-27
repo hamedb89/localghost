@@ -8,7 +8,14 @@ import { promisify } from "node:util";
 import test from "node:test";
 import { importLocalghost } from "./_localghost.mjs";
 
-const { detectDevCommand, formatDetectedDevCommand, renderLocalghostBanner } = await importLocalghost();
+const {
+  detectDevCommand,
+  detectPackageManager,
+  formatDetectedDevCommand,
+  packageAddCommand,
+  packageRunCommand,
+  renderLocalghostBanner
+} = await importLocalghost();
 const execFileAsync = promisify(execFile);
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(repo, "dist/cli.js");
@@ -49,6 +56,9 @@ test("renders the Localghost terminal identity", () => {
 test("detects Bun from its lockfile", async (t) => {
   const cwd = await project(t, { scripts: { dev: "bun server.ts" } }, ["bun.lock"]);
   assert.deepEqual(detectDevCommand({ cwd }).command, ["bun", "run", "dev"]);
+  assert.equal(detectPackageManager(cwd), "bun");
+  assert.equal(packageRunCommand("bun", "localghost:setup"), "bun run localghost:setup");
+  assert.equal(packageAddCommand("bun"), "bun add -d @hamedb89/localghost");
 });
 
 test("uses an explicit configured command", async (t) => {

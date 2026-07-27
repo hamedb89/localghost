@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { getProjectName, LOCALGHOST_CONFIG_FILE, sanitizeProjectName } from "./config.js";
 import { writeTextFile } from "./fs.js";
 
-export type PackageManager = "npm" | "yarn" | "pnpm";
+export type PackageManager = "npm" | "yarn" | "pnpm" | "bun";
 
 export type InitOptions = {
   cwd?: string;
@@ -29,18 +29,21 @@ export type InitResult = {
 export function detectPackageManager(cwd = process.cwd()): PackageManager {
   if (existsSync(join(cwd, "pnpm-lock.yaml"))) return "pnpm";
   if (existsSync(join(cwd, "yarn.lock"))) return "yarn";
+  if (existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb"))) return "bun";
   return "npm";
 }
 
 export function packageRunCommand(packageManager: PackageManager, script: string): string {
   if (packageManager === "yarn") return `yarn ${script}`;
   if (packageManager === "pnpm") return `pnpm ${script}`;
+  if (packageManager === "bun") return `bun run ${script}`;
   return `npm run ${script}`;
 }
 
 export function packageAddCommand(packageManager: PackageManager, packageName = "@hamedb89/localghost"): string {
   if (packageManager === "yarn") return `yarn add -D ${packageName}`;
   if (packageManager === "pnpm") return `pnpm add -D ${packageName}`;
+  if (packageManager === "bun") return `bun add -d ${packageName}`;
   return `npm install -D ${packageName}`;
 }
 
