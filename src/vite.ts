@@ -34,6 +34,7 @@ export type LocalGhostPluginOptions = {
   https?: boolean;
   bindHost?: string | boolean;
   dynamicPort?: boolean;
+  autoRepair?: boolean;
   primaryHost?: string;
   log?: boolean;
   setup?: boolean | "prompt";
@@ -304,13 +305,12 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
   });
 
   if (!hasReadySetup(cwd, context.entries, resolved.path, context.https)) {
-    if (options.setup === false || !canPrompt()) return context;
+    if (options.setup === false || !context.autoRepair) return context;
+    if (options.setup === "prompt" && (!canPrompt() || !(await confirm("Repair Localghost setup now?", true)))) return context;
 
-    const setup = await confirm("Run caddy:setup now?", true);
-    if (setup) {
-      await setupProject(cwd, context.entries, resolved.path, context.https);
-      console.log(`All set. Setup state: ${getLocalghostStatePath(cwd)}`);
-    }
+    console.log("Localghost setup is stale; repairing it now.");
+    await setupProject(cwd, context.entries, resolved.path, context.https);
+    console.log(`Repair complete. Setup state: ${getLocalghostStatePath(cwd)}`);
   }
 
   return context;

@@ -7,6 +7,7 @@ localghost - friendly local hostnames for app repos
 ## Synopsis
 
 ```sh
+localghost [--cwd path] [--dry-run]
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
@@ -17,9 +18,22 @@ localghost status [--ready] [--json]
 localghost ps [--json]
 localghost tunnel [--cwd path] [--config file] [--config-pattern regex] [--ghost-config file] [--target-host host]
 localghost update [--json]
-localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust]
-localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust] [--dynamic-port] -- command
+localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
+localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
 localghost print [--config file] [--config-pattern regex]
+```
+
+With no subcommand, Localghost detects the package manager from `packageManager` or a lockfile, prefers a non-recursive `dev:raw` script, falls back to `dev`, and runs the result through the normal Caddy lifecycle. `--dry-run` prints the detected command without checking or changing machine setup. Set `command: ["pnpm", "dev:web"]` in `localghost.config.mjs` when inference should be explicit.
+
+For multiple independently started applications, configure `services` in `localghost.config.mjs`. Each service declares a unique name and host plus its project-relative working directory, requested port, and optional command. Bare `localghost` starts one Caddy process and all service commands, passes service-specific `LOCALGHOST_PORT`, `VITE_PORT`, and `LOCALGHOST_SERVICE` variables, and stops the group when any process exits.
+
+```js
+export default {
+  services: [
+    { name: "web", cwd: "apps/web", host: "xyz.localhost", port: 5173, command: ["pnpm", "dev"] },
+    { name: "api", cwd: "apps/api", host: "api.xyz.localhost", port: 8787, command: ["pnpm", "dev"] }
+  ]
+};
 ```
 
 ## Description
@@ -77,6 +91,15 @@ Validates the HTTPS Caddyfile and runs `caddy trust --config <Caddyfile>` so bro
 
 ```sh
 localghost trust
+```
+
+### repair
+
+Reconciles the managed hosts block, regenerates and validates the Caddyfile, and refreshes project setup state. Use `--https --trust` to also re-run Caddy's local certificate trust step.
+
+```sh
+localghost repair
+localghost repair --https --trust
 ```
 
 ### teardown
@@ -141,7 +164,7 @@ localghost routes
 
 ### dev
 
-Requires setup to be ready, writes `ops/local/Caddyfile`, validates it, and runs Caddy. Supports `--config` and `--config-pattern`. HTTP is the default. Pass `--https` or `--ssl` to run a local HTTPS proxy. Pass `--setup` to explicitly allow `dev` to run setup first when setup is missing or stale. Pass `--trust` to force the Caddy trust step before the proxy stays running.
+Performs a read-only readiness check, repairs stale setup when needed, writes and validates `ops/local/Caddyfile`, and runs Caddy. Supports `--config` and `--config-pattern`. HTTP is the default. Pass `--https` or `--ssl` to run a local HTTPS proxy, `--auto-repair=no` for strict failure behavior, or `--trust` to force the Caddy trust step before the proxy stays running.
 
 ```sh
 localghost dev
@@ -157,9 +180,9 @@ localghost run --trust -- vite
 localghost run --dynamic-port=no -- vite
 ```
 
-By default, Localghost starts at the configured port and walks upward until `127.0.0.1:<port>` is free. Pass `--dynamic-port=no` when you want strict fixed-port behavior. Pass `--setup` to explicitly allow setup when the hosts block is missing or stale.
+By default, Localghost starts at the configured port and walks upward until `127.0.0.1:<port>` is free. It performs a read-only readiness check and repairs stale setup before starting the child. Pass `--dynamic-port=no` for strict fixed-port behavior or `--auto-repair=no` to fail instead of repairing.
 
-When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as an override layer. Most repos can skip it; add it only for decisions like `https: true`, `dynamicPort: false`, `wwwAlias: false`, custom ports, explicit project names, or the production `ghostTunnel` opt-in.
+When `localghost.config.mjs` exists, `run`, `dev`, `setup`, `status`, `routes`, and the Vite plugin use it as an override layer. Most repos can skip it; add it only for decisions like `https: true`, `dynamicPort: false`, `autoRepair: false`, `wwwAlias: false`, custom ports, explicit project names, or the production `ghostTunnel` opt-in.
 
 `ghostTunnel` does not change local Caddy or `/etc/hosts` setup. It marks `<route>-<project>-<owner>.ghost.<domain>` as a production app entrypoint. Use `ghostTunnel: { domains: "example.com", mode: "manual" }` when the production base domain is known, or omit `domains` to keep logs wildcarded as `https://<route>-<project>-<owner>.ghost.*/`. Production code can call `readLocalghostProjectConfig()`, `constructGhostTunnelUrl()`, and `assertSecureGhostTunnelRequest()` to read the flag, construct default tunnel URLs, validate the wildcard host shape, require HTTPS by default, and require an app-authenticated request by default.
 

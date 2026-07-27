@@ -38,3 +38,28 @@ jobs:
 
       - name: Verify package and site
         run: corepack npm run release:check
+
+  e2e:
+    name: Runtime E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Node, Vite, Bun, repair, and multi-service E2E
+        run: npm run test:e2e

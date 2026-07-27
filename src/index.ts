@@ -12,6 +12,7 @@ export {
   unregisterLocalghostSetup,
   writeLocalghostActivity
 } from "./activity.js";
+export { renderCompactLocalghostBanner, renderLocalghostBanner } from "./brand.js";
 export {
   getConfigFileCandidates,
   getDevHostsPath,
@@ -60,6 +61,19 @@ export {
 } from "./ghost-request.js";
 export { defineLocalghostConfig, readLocalghostProjectConfig, resolveLocalghostContext } from "./context.js";
 export { checkCaddy, runDoctor } from "./doctor.js";
+export {
+  detectDevCommand,
+  detectDevPackageManager,
+  detectDevServices,
+  formatDetectedDevCommand,
+  formatDetectedDevServices
+} from "./command.js";
+export type {
+  DetectedDevCommand,
+  DetectedDevService,
+  LocalghostPackageManager,
+  LocalghostServiceOptions
+} from "./command.js";
 export { assertLocalDevelopment, getProductionEnvKeys, getProductionReason, isProductionLike } from "./env.js";
 export {
   getSystemHostsPath,

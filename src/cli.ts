@@ -14,8 +14,16 @@ import {
   type LocalghostSetupRecord
 } from "./activity.js";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
+import { renderLocalghostBanner } from "./brand.js";
 import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy, trustCaddy } from "./caddy.js";
-import { resolveLocalghostContext } from "./context.js";
+import {
+  detectDevCommand,
+  detectDevServices,
+  formatDetectedDevCommand,
+  formatDetectedDevServices,
+  type DetectedDevService
+} from "./command.js";
+import { readLocalghostProjectConfig, resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
 import { listGhostTunnelEntries } from "./ghost-file.js";
@@ -44,6 +52,11 @@ function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
 
 function shouldColor() {
   return process.stdout.isTTY && !process.env.NO_COLOR;
+}
+
+function printLocalghostBanner() {
+  console.log(renderLocalghostBanner());
+  console.log("");
 }
 
 function logDomainRoutes(
@@ -102,13 +115,18 @@ type TrustCliOptions = {
   trust?: boolean;
 };
 
-function contextOptionsFromCli(options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) {
+type AutoRepairCliOptions = {
+  autoRepair?: boolean;
+};
+
+function contextOptionsFromCli(options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions & AutoRepairCliOptions) {
   return {
     cwd: options.cwd,
     ...(options.project ? { project: options.project } : {}),
     ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
     ...(options.configPattern ? { configPattern: options.configPattern } : {}),
-    ...(useHttps(options) ? { https: true } : {})
+    ...(useHttps(options) ? { https: true } : {}),
+    ...(typeof options.autoRepair === "boolean" ? { autoRepair: options.autoRepair } : {})
   };
 }
 
@@ -350,6 +368,155 @@ function registerCleanup(id: string) {
   };
 }
 
+async function resolveServiceRuntimeEntries(
+  services: DetectedDevService[],
+  dynamicPort: boolean
+) {
+  const usedPorts = new Set<number>();
+  const resolved = [];
+
+  for (const service of services) {
+    let port = service.requestedPort;
+    if (dynamicPort) {
+      let found = false;
+      for (let offset = 0; offset < 50; offset += 1) {
+        const candidate = service.requestedPort + offset;
+        if (candidate > 65_535 || usedPorts.has(candidate)) continue;
+        if (await isPortAvailable(candidate)) {
+          port = candidate;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        throw new Error(`No available port found for service ${service.name} from ${service.requestedPort}.`);
+      }
+    } else if (usedPorts.has(port)) {
+      throw new Error(`Services cannot start separate commands on the same fixed port: ${port}.`);
+    }
+
+    usedPorts.add(port);
+    resolved.push({
+      ...service,
+      port,
+      entry: {
+        host: service.host,
+        port,
+        target: `127.0.0.1:${port}`
+      } satisfies DevHostEntry
+    });
+  }
+
+  return resolved;
+}
+
+async function waitForServicePorts(entries: DevHostEntry[], timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  const ports = [...new Set(entries.map((entry) => entry.port))];
+
+  while (Date.now() < deadline) {
+    const availability = await Promise.all(ports.map((port) => isPortAvailable(port)));
+    if (availability.every((available) => !available)) return true;
+    await wait(50);
+  }
+
+  return false;
+}
+
+async function runDetectedServices(options: {
+  cwd: string;
+  services: DetectedDevService[];
+  configPath: string;
+  projectName: string;
+  https: boolean;
+  dynamicPort: boolean;
+  autoRepair: boolean;
+}) {
+  assertLocalDevelopment("run");
+  await assertCaddyReady();
+
+  const runtimeServices = await resolveServiceRuntimeEntries(options.services, options.dynamicPort);
+  const entries = runtimeServices.map((service) => service.entry);
+  const readiness = getSetupReadiness({
+    cwd: options.cwd,
+    https: options.https,
+    ignoreCaddyfile: true,
+    entries,
+    configPath: options.configPath,
+    projectName: options.projectName
+  });
+
+  if (!readiness.ready) {
+    if (!options.autoRepair) {
+      throw new Error([
+        "Localghost setup is missing or stale.",
+        ...readiness.reasons.map((reason) => `- ${reason}`),
+        "Automatic repair is disabled. Enable autoRepair or run localghost repair."
+      ].join("\n"));
+    }
+    console.log("Localghost setup is stale; repairing it now.");
+    await runSetupFromReadiness(options.cwd, options.https, readiness);
+  }
+
+  for (const service of runtimeServices) {
+    if (service.port !== service.requestedPort) {
+      console.log(`${service.name}: port ${service.requestedPort} is busy; using ${service.port}.`);
+    }
+  }
+
+  const caddyfile = await writeCaddyfile(entries, options.cwd, { https: options.https });
+  await validateCaddyfile(caddyfile);
+  const caddy = startCaddy(caddyfile);
+  const caddyExit = caddy.catch((error: unknown) => {
+    if (!caddy.killed) throw error;
+  });
+  const children = runtimeServices.map((service) => execa(service.command[0]!, service.command.slice(1), {
+    cwd: service.cwd,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      LOCALGHOST_PORT: String(service.port),
+      LOCALGHOST_DYNAMIC_PORT: options.dynamicPort ? "1" : "0",
+      LOCALGHOST_SERVICE: service.name,
+      VITE_PORT: String(service.port)
+    }
+  }));
+  const caddyPid = maybePid(caddy.pid);
+  const runRecord = registerLocalghostRun({
+    mode: "run",
+    cwd: options.cwd,
+    projectName: options.projectName,
+    configPath: options.configPath,
+    caddyfilePath: caddyfile,
+    ...(caddyPid ? { caddyPid } : {}),
+    childCommand: ["services", ...runtimeServices.map((service) => service.name)],
+    https: options.https,
+    dynamicPort: options.dynamicPort,
+    entries
+  });
+  const cleanupRun = registerCleanup(runRecord.id);
+  const processExit = Promise.race([caddyExit, ...children]);
+
+  try {
+    const ready = await Promise.race([
+      waitForServicePorts(entries),
+      processExit.then(() => false)
+    ]);
+    if (ready) {
+      console.log("");
+      logDomainRoutes(entries, { https: options.https });
+    }
+    await processExit;
+  } finally {
+    for (const child of children) {
+      if (!child.killed) child.kill("SIGINT");
+    }
+    if (!caddy.killed) caddy.kill("SIGINT");
+    await Promise.allSettled([caddyExit, ...children]);
+    cleanupRun();
+  }
+}
+
 async function getRouteViews(entries: DevHostEntry[]): Promise<LocalghostRouteView[]> {
   const portStatus = new Map<number, boolean>();
 
@@ -573,6 +740,7 @@ program
   .option("--ssl", "Alias for --https")
   .action(async (options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions) => {
     assertLocalDevelopment("setup");
+    printLocalghostBanner();
     await assertCaddyReady();
 
     const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
@@ -649,6 +817,50 @@ program
     const caddyfile = await writeCaddyfile(context.entries, options.cwd, { https: true });
     await validateCaddyfile(caddyfile);
     await runTrust(options.cwd, caddyfile);
+  });
+
+program
+  .command("repair")
+  .description("Reconcile stale hosts, Caddyfile, setup state, and optional HTTPS trust")
+  .option("--project <name>", "Managed /etc/hosts block name")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--https", "Repair an HTTPS Caddy setup")
+  .option("--ssl", "Alias for --https")
+  .option("--trust", "Re-run Caddy's local HTTPS trust step")
+  .action(async (
+    options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions & TrustCliOptions
+  ) => {
+    assertLocalDevelopment("repair");
+    printLocalghostBanner();
+    await assertCaddyReady();
+
+    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    const readiness = getSetupReadiness({
+      ...options,
+      https: context.https,
+      entries: context.entries,
+      configPath: context.configPath,
+      projectName: context.projectName
+    });
+
+    if (options.trust && !context.https) {
+      throw new Error("Cannot repair HTTPS trust unless HTTPS is enabled. Pass --https or configure https: true.");
+    }
+
+    warnAboutLocalMdns(context.entries);
+    logDomainRoutes(context.entries, { https: context.https, ghostTunnel: context.ghostTunnel });
+    await runSetupFromReadiness(options.cwd, context.https, readiness);
+
+    if (options.trust) {
+      await runTrust(options.cwd, readiness.caddyfilePath);
+    }
+
+    console.log(`Repaired hosts: ${getSystemHostsPath()}`);
+    console.log(`Repaired Caddyfile: ${readiness.caddyfilePath}`);
+    console.log(`Repaired state: ${readiness.statePath}`);
+    console.log("Repair complete.");
   });
 
 program
@@ -819,16 +1031,19 @@ program
 
 program
   .command("dev")
-  .description("Run the Localghost Caddy proxy after setup")
+  .description("Run the Localghost Caddy proxy, repairing stale setup when needed")
   .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
   .option("--config-pattern <regex>", "Regex for config filenames in the project root")
   .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
   .option("--ssl", "Alias for --https")
-  .option("--setup", "Run setup before starting the proxy when setup is missing or stale")
+  .option("--setup", "Alias for automatic repair when setup is missing or stale")
+  .option("--auto-repair [yes|no]", "Repair stale setup before starting (default: yes)", parseBooleanLike)
   .option("--trust", "Trust Caddy's local HTTPS CA before starting the proxy")
-  .action(async (options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions & TrustCliOptions) => {
+  .action(async (
+    options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions
+  ) => {
     assertLocalDevelopment("dev");
     await assertCaddyReady();
 
@@ -843,42 +1058,19 @@ program
     });
 
     if (!readiness.ready) {
-      if (!options.setup) {
+      if (!options.setup && !context.autoRepair) {
         throw new Error(
           [
             "Localghost setup is missing or stale.",
             ...readiness.reasons.map((reason) => `- ${reason}`),
             `Run: ${readiness.setupCommand}`,
-            "Or rerun dev with --setup if you want Localghost to perform setup first."
+            "Automatic repair is disabled. Rerun without --auto-repair=no or run localghost repair."
           ].join("\n")
         );
       }
 
-      explainHostsPassword();
-      const hostsResult = await updateSystemHosts(readiness.projectName, readiness.entries);
-      const caddyfilePath = await writeCaddyfile(readiness.entries, options.cwd, { https });
-      await validateCaddyfile(caddyfilePath);
-      writeLocalghostState(options.cwd, {
-        action: "setup",
-        projectName: readiness.projectName,
-        cwd: options.cwd,
-        configPath: readiness.configPath,
-        hostsPath: hostsResult.hostsPath,
-        hostsChanged: hostsResult.changed,
-        ...(hostsResult.tempPath ? { hostsTempPath: hostsResult.tempPath } : {}),
-        caddyfilePath,
-        caddyHttps: https,
-        ...existingTrustMarkers(options.cwd),
-        entries: readiness.entries
-      });
-      registerLocalghostSetup({
-        cwd: options.cwd,
-        projectName: readiness.projectName,
-        configPath: readiness.configPath,
-        caddyfilePath,
-        https,
-        entries: readiness.entries
-      });
+      console.log("Localghost setup is stale; repairing it now.");
+      await runSetupFromReadiness(options.cwd, https, readiness);
     }
 
     warnAboutLocalMdns(readiness.entries);
@@ -928,13 +1120,14 @@ program
   .option("--port <number>", "Initial app port", parsePort)
   .option("--https", "Run a local HTTPS proxy with Caddy local certificates")
   .option("--ssl", "Alias for --https")
-  .option("--setup", "Run setup before starting when setup is missing or stale")
+  .option("--setup", "Alias for automatic repair when setup is missing or stale")
+  .option("--auto-repair [yes|no]", "Repair stale setup before starting (default: yes)", parseBooleanLike)
   .option("--trust", "Trust Caddy's local HTTPS CA before starting the child command")
   .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike)
   .argument("<command...>", "Command to run after --, for example: localghost run -- vite")
   .action(async (
     command: string[],
-    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions & TrustCliOptions
+    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions
   ) => {
     assertLocalDevelopment("run");
     await assertCaddyReady();
@@ -946,7 +1139,8 @@ program
       ...(options.configPattern ? { configPattern: options.configPattern } : {}),
       ...(options.port ? { port: options.port } : {}),
       ...(useHttps(options) ? { https: true } : {}),
-      ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {})
+      ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {}),
+      ...(typeof options.autoRepair === "boolean" ? { autoRepair: options.autoRepair } : {})
     });
     const https = context.https;
     const readiness = getSetupReadiness({
@@ -959,19 +1153,20 @@ program
     });
 
     if (!readiness.ready) {
-      const shouldSetup = options.setup === true || (canPrompt() && await confirm("Run caddy:setup now?", true));
-      if (!shouldSetup) {
+      if (!options.setup && !context.autoRepair) {
         throw new Error(
           [
             "Localghost setup is missing or stale.",
             ...readiness.reasons.map((reason) => `- ${reason}`),
-            `Run: ${readiness.setupCommand}`
+            `Run: ${readiness.setupCommand}`,
+            "Automatic repair is disabled. Rerun without --auto-repair=no or run localghost repair."
           ].join("\n")
         );
       }
 
+      console.log("Localghost setup is stale; repairing it now.");
       await runSetupFromReadiness(options.cwd, https, readiness);
-      console.log(`All set. Setup state: ${getLocalghostStatePath(options.cwd)}`);
+      console.log(`Repair complete. Setup state: ${getLocalghostStatePath(options.cwd)}`);
     }
 
     if (context.dynamicPort && context.port !== context.requestedPort) {
@@ -1139,7 +1334,93 @@ program
     console.log(JSON.stringify(entries, null, 2));
   });
 
-program.parseAsync().catch((error: unknown) => {
+function readImplicitInvocation(args: string[]) {
+  if (args.some((arg) => arg === "--help" || arg === "-h" || arg === "--version" || arg === "-V")) return null;
+
+  let cwd = process.cwd();
+  let dryRun = false;
+  let updateCheck = true;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+    if (arg === "--dry-run") {
+      dryRun = true;
+      continue;
+    }
+    if (arg === "--no-update-check") {
+      updateCheck = false;
+      continue;
+    }
+    if (arg === "--cwd") {
+      const value = args[index + 1];
+      if (!value) throw new Error("--cwd requires a path.");
+      cwd = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--cwd=")) {
+      cwd = arg.slice("--cwd=".length);
+      continue;
+    }
+    return null;
+  }
+
+  return { cwd, dryRun, updateCheck };
+}
+
+async function main() {
+  const implicit = readImplicitInvocation(process.argv.slice(2));
+  if (!implicit) {
+    await program.parseAsync();
+    return;
+  }
+
+  const projectConfig = await readLocalghostProjectConfig({ cwd: implicit.cwd });
+  printLocalghostBanner();
+  if (projectConfig.config.services) {
+    if (!projectConfig.path) throw new Error("Multi-service configuration must come from localghost.config.mjs.");
+    const services = detectDevServices({
+      cwd: implicit.cwd,
+      services: projectConfig.config.services
+    });
+    console.log(formatDetectedDevServices(services));
+    if (implicit.dryRun) return;
+
+    await runDetectedServices({
+      cwd: implicit.cwd,
+      services,
+      configPath: projectConfig.path,
+      projectName: sanitizeProjectName(projectConfig.config.project ?? getProjectName(implicit.cwd)),
+      https: projectConfig.config.https ?? false,
+      dynamicPort: projectConfig.config.dynamicPort ?? true,
+      autoRepair: projectConfig.config.autoRepair ?? true
+    });
+    await maybeNotifyAboutUpdate({ disabled: !implicit.updateCheck });
+    return;
+  }
+
+  const detected = detectDevCommand({
+    cwd: implicit.cwd,
+    ...(projectConfig.config.command ? { command: projectConfig.config.command } : {})
+  });
+  console.log(`Localghost detected: ${formatDetectedDevCommand(detected)}`);
+
+  if (implicit.dryRun) return;
+
+  await program.parseAsync([
+    process.argv[0] ?? process.execPath,
+    process.argv[1] ?? "localghost",
+    ...(implicit.updateCheck ? [] : ["--no-update-check"]),
+    "run",
+    "--cwd",
+    implicit.cwd,
+    "--",
+    ...detected.command
+  ]);
+}
+
+main().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);
   process.exitCode = 1;

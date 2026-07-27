@@ -27,7 +27,8 @@ function getManagedBlockPattern(projectName: string) {
   return new RegExp(`${escapeRegExp(start)}[\\s\\S]*?${escapeRegExp(end)}\\n?`, "m");
 }
 
-export function getSystemHostsPath() {
+export function getSystemHostsPath(env: NodeJS.ProcessEnv = process.env) {
+  if (env.LOCALGHOST_HOSTS_PATH) return env.LOCALGHOST_HOSTS_PATH;
   return process.platform === "win32" ? "C:\\Windows\\System32\\drivers\\etc\\hosts" : "/etc/hosts";
 }
 
@@ -67,6 +68,11 @@ async function writeSystemHostsFile(hostsPath: string, next: string, projectName
   const sanitizedProjectName = sanitizeProjectName(projectName);
   const tempPath = join(tmpdir(), `localghost-${sanitizedProjectName}-hosts`);
   writeFileSync(tempPath, next, "utf8");
+
+  if (process.env.LOCALGHOST_HOSTS_PATH) {
+    writeFileSync(hostsPath, next, "utf8");
+    return tempPath;
+  }
 
   if (process.platform === "win32") {
     throw new Error(`Windows support: run as administrator and copy ${tempPath} to ${hostsPath}.`);

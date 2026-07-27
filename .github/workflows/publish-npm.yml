@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 22.14.0
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: package-lock.json
@@ -42,8 +42,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Verify package and site
         run: npm run release:check
+
+      - name: Verify runtime E2E
+        run: npm run test:e2e
 
       - name: Publish to npm
         run: npm run publish:public

@@ -7,6 +7,14 @@ export type CaddyModeOptions = {
   https?: boolean;
 };
 
+function shouldShowCaddyLogs() {
+  return ["1", "true", "yes", "on"].includes((process.env.LOCALGHOST_CADDY_VERBOSE ?? "").toLowerCase());
+}
+
+function caddyStdio() {
+  return shouldShowCaddyLogs() ? "inherit" as const : "pipe" as const;
+}
+
 function groupByPort(entries: DevHostEntry[]) {
   const groups = new Map<number, DevHostEntry[]>();
 
@@ -35,7 +43,7 @@ export function renderCaddyfile(entries: DevHostEntry[], options: CaddyModeOptio
         .join(", ");
 
       return `${hosts} {
-  reverse_proxy 127.0.0.1:${port}
+\treverse_proxy 127.0.0.1:${port}
 }`;
     });
 
@@ -60,21 +68,21 @@ export async function writeCaddyfile(entries: DevHostEntry[], cwd = process.cwd(
 export async function validateCaddyfile(path: string) {
   await execa("caddy", ["validate", "--config", path], {
     cwd: dirname(path),
-    stdio: "inherit"
+    stdio: caddyStdio()
   });
 }
 
 export async function runCaddy(path: string) {
   await execa("caddy", ["run", "--config", path], {
     cwd: dirname(path),
-    stdio: "inherit"
+    stdio: caddyStdio()
   });
 }
 
 export function startCaddy(path: string) {
   return execa("caddy", ["run", "--config", path], {
     cwd: dirname(path),
-    stdio: "inherit"
+    stdio: caddyStdio()
   });
 }
 

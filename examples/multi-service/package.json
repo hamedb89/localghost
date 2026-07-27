@@ -1,0 +1,11 @@
+{
+  "name": "localghost-multi-service-example",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.0.0",
+  "scripts": {
+    "localghost": "node ../../dist/cli.js",
+    "plan": "node ../../dist/cli.js --dry-run",
+    "dev": "node ../../dist/cli.js"
+  }
+}

@@ -9,7 +9,7 @@ Buh. Friendly local hostnames for app repos.
 [![CI](https://github.com/hamedb89/localghost/actions/workflows/ci.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/ci.yml)
 [![GitHub Pages](https://github.com/hamedb89/localghost/actions/workflows/pages.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/pages.yml)
 [![Publish npm](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml/badge.svg)](https://github.com/hamedb89/localghost/actions/workflows/publish-npm.yml)
-[![npm version](https://img.shields.io/badge/npm-v0.1.11-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
+[![npm version](https://img.shields.io/badge/npm-v0.1.12-CB3837?logo=npm)](https://www.npmjs.com/package/@hamedb89/localghost)
 
 Localghost is a tiny Node.js CLI for clean local app domains. Add it as a dev dependency, keep running the command your team already knows, and use `http://app.localhost/` instead of remembering which port belongs to which process.
 
@@ -62,6 +62,18 @@ For non-Vite apps, wrap your raw dev command:
 
 ## The Simple Stuff
 
+Start the detected development server with Localghost:
+
+```sh
+npm exec localghost
+```
+
+Localghost detects the package manager, prefers a non-recursive `dev:raw` script, falls back to `dev`, repairs stale setup when needed, then starts Caddy and the server. Preview the decision without starting anything:
+
+```sh
+npm exec localghost -- --dry-run
+```
+
 Create the repo-local hostname contract:
 
 ```sh
@@ -84,6 +96,12 @@ Check setup readiness:
 
 ```sh
 localghost status --ready
+```
+
+Repair stale hosts, Caddy configuration, or setup state:
+
+```sh
+localghost repair
 ```
 
 Run only the local proxy:
@@ -184,6 +202,7 @@ admin.app.localhost 5174
     "localghost:proxy:https": "localghost dev --https",
     "localghost:run": "localghost run --",
     "localghost:ready": "localghost status --ready",
+    "localghost:repair": "localghost repair",
     "localghost:trust": "localghost trust",
     "localghost:ps": "localghost ps",
     "localghost:print": "localghost print",
@@ -287,11 +306,58 @@ export default defineLocalghostConfig({
   project: "app",
   port: 5173,
   dynamicPort: true,
+  autoRepair: true,
+  command: ["pnpm", "dev"],
   wwwAlias: true
 });
 ```
 
-Localghost derives `project` from `package.json`, defaults to port `5173`, keeps HTTP as the default, enables dynamic ports by default, and adds `www.` aliases by default.
+Localghost derives `project` from `package.json`, defaults to port `5173`, keeps HTTP as the default, enables dynamic ports and setup repair by default, and adds `www.` aliases by default. `run`, `dev`, and the Vite plugin perform a read-only readiness check first and repair only when the managed hosts block or setup state is stale.
+
+With no subcommand, `command` takes precedence. Otherwise Localghost detects npm, pnpm, Yarn, or Bun and runs `dev:raw` or `dev`. Scripts that invoke Localghost are skipped to prevent recursion.
+
+### Multiple Apps
+
+For a monorepo where one root command already starts every app, keep using `command` and list the routes in `.localghost`.
+
+When Localghost should own each process, configure explicit services:
+
+```js
+export default defineLocalghostConfig({
+  services: [
+    {
+      name: "web",
+      cwd: "apps/web",
+      host: "xyz.localhost",
+      port: 5173,
+      command: ["pnpm", "dev"]
+    },
+    {
+      name: "api",
+      cwd: "apps/api",
+      host: "api.xyz.localhost",
+      port: 8787,
+      command: ["pnpm", "dev"]
+    }
+  ]
+});
+```
+
+Then bare `localghost` starts one Caddy instance and both services. Each command runs in its own `cwd` and receives its own `LOCALGHOST_PORT`, `VITE_PORT`, and `LOCALGHOST_SERVICE`. Dynamic-port selection and setup repair apply to every service. When Caddy or any service exits, Localghost stops the remaining processes.
+
+Omit a service `command` to detect `dev:raw` or `dev` from that service directory. Service directories must stay inside the project root, and names and hosts must be unique.
+
+Caddy startup and validation logs are quiet after success; configuration errors remain visible. Set `LOCALGHOST_CADDY_VERBOSE=1` when debugging Caddy itself. Once all service ports are listening, Localghost prints the final hostname-to-upstream map beneath the service startup logs.
+
+Try the runnable Node example in [`examples/multi-service`](./examples/multi-service).
+
+Disable automatic repair when you want strict failure behavior:
+
+```sh
+localghost run --auto-repair=no -- vite
+```
+
+Or set `autoRepair: false` in `localghost.config.mjs`. HTTPS certificate trust remains explicit.
 
 ### Fixed Ports
 
@@ -451,6 +517,20 @@ localghost update --json
 
 ### Reset Or Remove Localghost
 
+Reconcile the managed hosts block, regenerate and validate the Caddyfile, and refresh setup state:
+
+```sh
+localghost repair
+```
+
+For HTTPS certificate trust problems, explicitly re-run Caddy's trust step:
+
+```sh
+localghost repair --https --trust
+```
+
+If a running Caddy process exits, `localghost run` exits with it; starting the normal development command again launches a fresh Caddy process.
+
 Retest setup without deleting `.localghost`:
 
 ```sh
@@ -486,17 +566,19 @@ The app bundle is written to `dist/LocalghostWidget.app`.
 ## CLI Reference
 
 ```sh
+localghost [--cwd path] [--dry-run]
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
 localghost doctor
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
+localghost repair [--project name] [--config file] [--config-pattern regex] [--https|--ssl] [--trust]
 localghost trust [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
 localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
 localghost update [--json]
-localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust]
-localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--setup] [--trust] [--dynamic-port] -- command
+localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
+localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
 localghost routes [--https|--ssl]
 localghost print [--config file] [--config-pattern regex]
 ```

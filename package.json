@@ -1,6 +1,6 @@
 {
   "name": "@hamedb89/localghost",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Friendly local hostnames for app repos with .localghost, Caddy, /etc/hosts, and Vite.",
   "type": "module",
   "bin": {
@@ -45,6 +45,7 @@
     "macos:widget:build": "bash apps/macos-widget/build.sh",
     "dev": "tsx src/cli.ts",
     "test": "npm run build && node --test tests/*.test.mjs",
+    "test:e2e": "npm run build && node --test tests/e2e/*.test.mjs",
     "test:coverage": "npm run build && LOCALGHOST_TEST_SOURCE=1 node --import tsx --test --experimental-test-coverage --test-coverage-include=src/relay.ts --test-coverage-include=src/tunnel.ts --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=100 tests/*.test.mjs",
     "test:cli": "npm run build && node --test tests/cli.test.mjs",
     "typecheck": "tsc --noEmit",

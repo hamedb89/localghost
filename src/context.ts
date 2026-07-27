@@ -11,6 +11,7 @@ import {
 } from "./config.js";
 import { findAvailablePort } from "./port.js";
 import type { DevHostEntry } from "./parse.js";
+import type { LocalghostServiceOptions } from "./command.js";
 import { resolveGhostTunnelConfig, type GhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
 
 export type LocalghostContextOptions = {
@@ -25,6 +26,9 @@ export type LocalghostContextOptions = {
   bindHost?: string | boolean;
   primaryHost?: string;
   dynamicPort?: boolean;
+  autoRepair?: boolean;
+  command?: string[];
+  services?: LocalghostServiceOptions[];
   wwwAlias?: boolean;
   ghostTunnel?: GhostTunnelOptions;
 };
@@ -41,6 +45,7 @@ export type LocalghostContext = {
   requestedPort: number;
   port: number;
   dynamicPort: boolean;
+  autoRepair: boolean;
   bindHost: string | boolean;
   primaryHost: string;
   https: boolean;
@@ -122,7 +127,11 @@ function withRuntimePort(entries: DevHostEntry[], requestedPort: number, port: n
   const hasRequestedPort = entries.some((entry) => entry.port === requestedPort);
   if (!hasRequestedPort) return entries;
 
-  return entries.map((entry) => (entry.port === requestedPort ? { ...entry, port } : entry));
+  return entries.map((entry) => (
+    entry.port === requestedPort
+      ? { ...entry, port, target: `127.0.0.1:${port}` }
+      : entry
+  ));
 }
 
 function uniqueHosts(entries: DevHostEntry[]) {
@@ -192,6 +201,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
   const configEntries = readDevHosts(readOptions);
   const requestedPort = merged.port ?? envPort() ?? configEntries[0]?.port ?? 5173;
   const dynamicPort = merged.dynamicPort ?? envDynamicPort() ?? true;
+  const autoRepair = merged.autoRepair ?? true;
   const bindHost = merged.bindHost ?? "127.0.0.1";
   const probeHost = typeof bindHost === "string" ? bindHost : "127.0.0.1";
   const port = dynamicPort ? await findAvailablePort(requestedPort, { host: probeHost }) : requestedPort;
@@ -224,6 +234,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     requestedPort,
     port,
     dynamicPort,
+    autoRepair,
     bindHost,
     primaryHost,
     https: merged.https ?? envHttps() ?? false,
