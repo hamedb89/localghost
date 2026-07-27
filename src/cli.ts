@@ -87,6 +87,13 @@ function parsePackageManager(value: string): PackageManager {
   throw new InvalidArgumentError("Package manager must be npm, pnpm, yarn, or bun.");
 }
 
+type ReleaseBump = "patch" | "minor" | "major";
+
+function parseReleaseBump(value: string): ReleaseBump {
+  if (value === "patch" || value === "minor" || value === "major") return value;
+  throw new InvalidArgumentError("Release bump must be patch, minor, or major.");
+}
+
 function collect(value: string, previous: string[] = []) {
   return [...previous, value];
 }
@@ -630,7 +637,7 @@ program
   .option("--no-update-check", "Skip the npm update check for this run");
 
 program.hook("postAction", async (_thisCommand, actionCommand) => {
-  if (actionCommand.name() === "update") return;
+  if (actionCommand.name() === "update" || actionCommand.name() === "release") return;
 
   const options = program.opts<{ updateCheck?: boolean }>();
   await maybeNotifyAboutUpdate({ disabled: options.updateCheck === false });
@@ -727,6 +734,36 @@ program
     }
 
     console.log(`localghost is up to date. Current: ${result.currentVersion}`);
+  });
+
+program
+  .command("release")
+  .description("Dispatch an automated Localghost CLI release")
+  .argument("<bump>", "Semantic version increment: patch, minor, or major", parseReleaseBump)
+  .action(async (bump: ReleaseBump) => {
+    const repository = "hamedb89/localghost";
+
+    try {
+      await execa("gh", [
+        "workflow",
+        "run",
+        "release.yml",
+        "--repo",
+        repository,
+        "--ref",
+        "main",
+        "-f",
+        `bump=${bump}`
+      ]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Could not dispatch the Localghost release workflow. Install and authenticate GitHub CLI with \`gh auth login\`, then retry.\n${detail}`
+      );
+    }
+
+    console.log(`Dispatched a ${bump} Localghost release from main.`);
+    console.log(`Track it at https://github.com/${repository}/actions/workflows/release.yml`);
   });
 
 program
@@ -1246,7 +1283,7 @@ program
 
 program
   .command("tunnel")
-  .description("Run the local Ghost Tunnel agent")
+  .description("Run the experimental local Ghost Tunnel agent")
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
   .option("--config-pattern <regex>", "Regex for config filenames in the project root")

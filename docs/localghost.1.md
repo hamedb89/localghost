@@ -17,6 +17,7 @@ localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
 localghost tunnel [--cwd path] [--config file] [--config-pattern regex] [--ghost-config file] [--target-host host]
+localghost release <patch|minor|major>
 localghost update [--json]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
@@ -136,7 +137,9 @@ localghost ps
 localghost ps --json
 ```
 
-### tunnel
+### tunnel (experimental)
+
+Ghost Tunnel is experimental. Its configuration, transport protocol, CLI behavior, and public APIs may change between releases; do not rely on it for production-critical access.
 
 Runs the local Ghost Tunnel agent for `ghostTunnel.transport: "tunnel"`. The command reads the Localghost project config, reads exact public hosts from `.ghosttunnel`, sends route heartbeats to the configured Redis REST store, polls for queued requests, and serves them from the matching local port.
 
@@ -153,6 +156,18 @@ Checks npm for a newer Localghost release. Pass `--json` for scripts and agents.
 ```sh
 localghost update
 ```
+
+### release
+
+Dispatches the repository's guarded GitHub Actions release pipeline from `main`. The command requires an installed and authenticated GitHub CLI.
+
+```sh
+localghost release patch
+localghost release minor
+localghost release major
+```
+
+The pipeline synchronizes version metadata, runs package and runtime verification, creates the version commit and tag, publishes npm with provenance, and creates generated GitHub release notes.
 
 ### routes
 

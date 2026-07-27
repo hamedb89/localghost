@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic version increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  prepare:
+    name: Prepare release
+    if: github.repository == 'hamedb89/localghost'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Require the main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases must be dispatched from the main branch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bump and synchronize version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          test -z "$(git status --porcelain)"
+          npm version "${BUMP}" --no-git-tag-version
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify package and site
+        run: npm run release:check
+
+      - name: Verify runtime E2E
+        run: npm run test:e2e
+
+      - name: Ensure version and tag are new
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists."
+            exit 1
+          fi
+          if npm view "@hamedb89/localghost@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::Version ${VERSION} is already published."
+            exit 1
+          fi
+
+      - name: Commit and tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json README.md src/update-check.ts
+          git commit -m "chore(release): ${TAG}"
+          git tag -a "${TAG}" -m "${TAG}"
+
+      - name: Push release atomically
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: git push --atomic origin HEAD:main "${TAG}"
+
+  publish:
+    name: Publish release
+    needs: prepare
+    uses: ./.github/workflows/publish-npm.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
+  github-release:
+    name: Create GitHub release
+    needs:
+      - prepare
+      - publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release create "${TAG}" --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes --title "${TAG}"

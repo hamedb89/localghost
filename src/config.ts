@@ -119,6 +119,13 @@ export function getProjectName(cwd = process.cwd()) {
 }
 
 export function sanitizeProjectName(value: string) {
-  const projectName = value.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  const sanitized = value.replace(/[^\w.-]+/g, "-");
+  let start = 0;
+  let end = sanitized.length;
+
+  while (start < end && sanitized.charCodeAt(start) === 45) start += 1;
+  while (end > start && sanitized.charCodeAt(end - 1) === 45) end -= 1;
+
+  const projectName = sanitized.slice(start, end);
   return projectName || "app";
 }

@@ -6,6 +6,7 @@ const {
   createGhostTunnelQueuedRequest,
   createGhostTunnelRouteHeartbeat,
   createMemoryGhostTunnelStore,
+  createRedisGhostTunnelStore,
   decodeGhostTunnelBody,
   encodeGhostTunnelBody,
   resolveRedisGhostTunnelEnv
@@ -83,4 +84,19 @@ test("Redis Ghost Tunnel env resolution prefers explicit Localghost vars", () =>
     () => resolveRedisGhostTunnelEnv({}),
     /REST env vars/
   );
+});
+
+test("Redis Ghost Tunnel store removes trailing slashes without a regular expression", async () => {
+  let requestedUrl;
+  const store = createRedisGhostTunnelStore({
+    url: `https://redis.example${"/".repeat(10_000)}`,
+    token: "token",
+    fetch: async (url) => {
+      requestedUrl = url;
+      return new Response(JSON.stringify({ result: null }));
+    }
+  });
+
+  await store.getRoute(host);
+  assert.equal(requestedUrl, "https://redis.example");
 });

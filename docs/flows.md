@@ -120,7 +120,9 @@ The plugin defaults to HTTP. Pass `https: true` only when Vite is expected to si
 
 If `.localghost` is missing, an interactive development run asks whether to create it, asks for the primary `.localhost` domain, allows extra domains, explains the `/etc/hosts` password prompt, and runs setup when confirmed. Non-interactive runs fail with the exact setup command instead of guessing.
 
-## Ghost Tunnel
+## Ghost Tunnel (Experimental)
+
+Ghost Tunnel is an experimental opt-in feature. Its configuration, transports, CLI behavior, and public APIs may change between releases and should not be used for production-critical access.
 
 As a production app, I want one opt-in flag that makes `<route>-<project>-<owner>.ghost.<domain>` a known product entrypoint on top of the deployed Vite app, without running local Caddy or requiring the local `.localghost` file.
 

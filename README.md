@@ -417,7 +417,10 @@ export default defineLocalghostConfig({
 });
 ```
 
-### Public Ghost Tunnel
+### Public Ghost Tunnel (Experimental)
+
+> [!WARNING]
+> Ghost Tunnel is experimental. Its configuration, transport protocol, and public APIs may change between releases. Do not rely on it for production-critical access, and review its authentication and network exposure before sharing a tunnel.
 
 `ghostTunnel` is an opt-in production URL shape for deployed wildcard endpoints. It does not change local Caddy or `/etc/hosts` setup.
 
@@ -579,6 +582,7 @@ localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
 localghost update [--json]
+localghost release <patch|minor|major>
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
 localghost routes [--https|--ssl]
@@ -614,6 +618,7 @@ import { localGhostPlugin } from "@hamedb89/localghost/vite";
 - GitHub Pages is deployed by Actions from the checked-in `site/`, `docs/`, and `assets/` sources.
 - Preview the exact Pages artifact locally with `npm run site:serve`, then open `http://127.0.0.1:4173/`.
 - npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
+- To release the CLI, run `localghost release patch`, `localghost release minor`, or `localghost release major`. The command dispatches the **Release** workflow from `main`; it synchronizes version metadata, verifies the package and runtime matrix, commits and tags the bump, publishes npm, and creates a GitHub Release with generated notes. GitHub CLI must be installed and authenticated.
 - Runtime dependencies are intentionally small: `commander` and `execa`. Vite is an optional peer dependency.
 - No postinstall scripts, hidden Homebrew installs, surprise browser tabs, or broad hosts-file rewrites.
 - Update checks are best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
@@ -624,7 +629,7 @@ import { localGhostPlugin } from "@hamedb89/localghost/vite";
 - [Rendered docs](https://hamedb89.github.io/localghost/docs/)
 - [User flows](./docs/flows.md)
 - [CLI reference](./docs/localghost.1.md)
-- [Ghost Tunnel guide](./docs/ghost-tunnel.md)
+- [Ghost Tunnel guide (experimental)](./docs/ghost-tunnel.md)
 - [macOS widget notes](./docs/macos-widget.md)
 - [Brand guidelines](./docs/brand.md)
 

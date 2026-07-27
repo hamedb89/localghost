@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -11,13 +11,14 @@ const { createRelayRouteRegistration, signRelayRouteClaim } = await importLocalg
 
 const execFileAsync = promisify(execFile);
 
-async function runCli(args) {
+async function runCli(args, env = {}) {
   return execFileAsync(process.execPath, ["dist/cli.js", "--no-update-check", ...args], {
     cwd: new URL("..", import.meta.url),
     env: {
       ...process.env,
       LOCALGHOST_OWNER: "tester",
-      LOCALGHOST_UPDATE_CHECK_DISABLED: "1"
+      LOCALGHOST_UPDATE_CHECK_DISABLED: "1",
+      ...env
     }
   });
 }
@@ -29,6 +30,40 @@ test("local CLI help is runnable without network update checks", async () => {
   assert.match(stdout, /Buh\. Friendly local hostnames/);
   assert.match(stdout, /setup/);
   assert.match(stdout, /run/);
+  assert.match(stdout, /release/);
+});
+
+test("release command dispatches the requested semantic bump", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-release-"));
+  const ghPath = join(cwd, "gh");
+  const argsPath = join(cwd, "gh-args.txt");
+  await writeFile(ghPath, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$LOCALGHOST_GH_ARGS\"\n");
+  await chmod(ghPath, 0o755);
+
+  const { stdout } = await runCli(["release", "patch"], {
+    PATH: `${cwd}:${process.env.PATH ?? ""}`,
+    LOCALGHOST_GH_ARGS: argsPath
+  });
+
+  assert.match(stdout, /Dispatched a patch Localghost release from main/);
+  assert.deepEqual((await readFile(argsPath, "utf8")).trim().split("\n"), [
+    "workflow",
+    "run",
+    "release.yml",
+    "--repo",
+    "hamedb89/localghost",
+    "--ref",
+    "main",
+    "-f",
+    "bump=patch"
+  ]);
+});
+
+test("release command rejects unsupported version bumps", async () => {
+  await assert.rejects(
+    runCli(["release", "banana"]),
+    (error) => error.code === 1 && /patch, minor, or major/.test(error.stderr)
+  );
 });
 
 test("CLI surface does not expose arbitrary URL proxying", async () => {

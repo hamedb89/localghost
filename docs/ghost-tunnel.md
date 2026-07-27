@@ -1,4 +1,7 @@
-# Ghost Tunnel
+# Ghost Tunnel (Experimental)
+
+> [!WARNING]
+> Ghost Tunnel is experimental. Its configuration, transport protocol, CLI behavior, and public APIs may change between releases. Do not rely on it for production-critical access. Review authentication, exposed routes, Redis credentials, and network reachability before sharing a tunnel.
 
 Ghost Tunnel is the production-facing Localghost entrypoint for apps that want a stable wildcard route on top of their existing Vite product:
 

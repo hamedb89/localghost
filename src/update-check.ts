@@ -114,7 +114,7 @@ export function isNewerVersion(candidate: string | undefined, current = LOCALGHO
 }
 
 async function fetchLatestVersion(packageName: string, timeoutMs: number) {
-  const encodedName = packageName.startsWith("@") ? `@${packageName.slice(1).replace("/", "%2f")}` : packageName;
+  const encodedName = packageName.startsWith("@") ? `@${packageName.slice(1).replaceAll("/", "%2f")}` : packageName;
   const response = await fetch(`https://registry.npmjs.org/${encodedName}`, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: {

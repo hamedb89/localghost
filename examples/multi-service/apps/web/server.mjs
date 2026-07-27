@@ -1,5 +1,15 @@
 import { createServer } from "node:http";
 
+const HTML_ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => HTML_ESCAPES[character]);
+
 const port = Number.parseInt(process.env.LOCALGHOST_PORT ?? "4173", 10);
 const server = createServer((request, response) => {
   response.setHeader("content-type", "text/html; charset=utf-8");
@@ -9,9 +19,9 @@ const server = createServer((request, response) => {
   <body>
     <h1>Web service is ready</h1>
     <dl>
-      <dt>Service</dt><dd>${process.env.LOCALGHOST_SERVICE ?? "web"}</dd>
+      <dt>Service</dt><dd>${escapeHtml(process.env.LOCALGHOST_SERVICE ?? "web")}</dd>
       <dt>Port</dt><dd>${port}</dd>
-      <dt>Path</dt><dd>${request.url}</dd>
+      <dt>Path</dt><dd>${escapeHtml(request.url ?? "/")}</dd>
     </dl>
   </body>
 </html>`);

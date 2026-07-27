@@ -132,6 +132,12 @@ function keyPart(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9._:-]/g, "_");
 }
 
+function removeTrailingSlashes(value: string) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 class MemoryGhostTunnelStore implements GhostTunnelStore {
   private readonly routes = new Map<string, GhostTunnelRouteHeartbeat>();
   private readonly queues = new Map<string, GhostTunnelQueuedRequest[]>();
@@ -199,7 +205,7 @@ class RedisGhostTunnelStore implements GhostTunnelStore {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: RedisGhostTunnelStoreOptions) {
-    this.url = options.url.replace(/\/+$/, "");
+    this.url = removeTrailingSlashes(options.url);
     this.token = options.token;
     this.namespace = options.namespace ?? "localghost";
     this.fetchImpl = options.fetch ?? fetch;
