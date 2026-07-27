@@ -44,6 +44,7 @@ function renderMarkdown(markdown) {
   let inCode = false;
   let codeLanguage = "";
   let codeLines = [];
+  let inAdmonition = false;
 
   function flushParagraph() {
     if (paragraph.length === 0) return;
@@ -65,7 +66,30 @@ function renderMarkdown(markdown) {
     html.push(`<${type}>`);
   }
 
+  function flushAdmonition() {
+    if (!inAdmonition) return;
+    html.push("</aside>");
+    inAdmonition = false;
+  }
+
   for (const line of lines) {
+    const admonition = line.match(/^> \[!(WARNING|NOTE)\]\s*$/);
+    if (admonition) {
+      flushParagraph();
+      flushList();
+      flushAdmonition();
+      html.push(`<aside class="admonition ${admonition[1].toLowerCase()}"><strong>${admonition[1] === "WARNING" ? "Warning" : "Note"}</strong>`);
+      inAdmonition = true;
+      continue;
+    }
+
+    const quotedLine = line.match(/^>\s?(.*)$/);
+    if (inAdmonition && quotedLine) {
+      html.push(`<p>${renderInlineMarkdown(quotedLine[1])}</p>`);
+      continue;
+    }
+    flushAdmonition();
+
     const codeFence = line.match(/^```(\w+)?\s*$/);
     if (codeFence) {
       if (inCode) {
@@ -122,13 +146,14 @@ function renderMarkdown(markdown) {
 
   flushParagraph();
   flushList();
+  flushAdmonition();
   return html.join("\n");
 }
 
 function getDocSummary(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const title = lines.find((line) => line.startsWith("# "))?.replace(/^#\s+/, "") || "Untitled";
-  const summary = lines.find((line) => line.trim() && !line.startsWith("#") && !line.startsWith("```")) || "";
+  const summary = lines.find((line) => line.trim() && !line.startsWith("#") && !line.startsWith(">") && !line.startsWith("```")) || "";
   return { title, summary };
 }
 
@@ -219,6 +244,16 @@ function pageShell({ title, description, body, pathPrefix }) {
       }
       .doc-card strong { display: block; margin-bottom: 4px; }
       .doc-card span { color: var(--muted); font-size: 0.94rem; }
+      .admonition {
+        margin: 20px 0;
+        padding: 16px 18px;
+        border: 1px solid #d9ccff;
+        border-left: 4px solid var(--violet);
+        border-radius: 8px;
+        background: #f8f5ff;
+      }
+      .admonition strong { color: var(--ink); }
+      .admonition p { margin: 6px 0 0; }
       h1 { font-size: clamp(2.2rem, 7vw, 4.2rem); line-height: 1.02; margin: 0 0 16px; }
       h2 { margin-top: 2.1rem; border-top: 1px solid var(--line); padding-top: 1.3rem; }
       h3 { margin-top: 1.7rem; }

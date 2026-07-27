@@ -291,6 +291,35 @@
         font-weight: 800;
       }
 
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        margin-left: 4px;
+        padding: 0 10px;
+        border: 1px solid rgba(109, 63, 242, 0.28);
+        border-radius: 999px;
+        color: var(--violet);
+        background: rgba(109, 63, 242, 0.08);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .experimental-note {
+        margin: 22px 0 0;
+        padding: 16px 18px;
+        border: 1px solid rgba(109, 63, 242, 0.24);
+        border-left: 4px solid var(--violet);
+        border-radius: 8px;
+        color: var(--muted);
+        background: rgba(255,255,255,0.76);
+        line-height: 1.55;
+      }
+
+      .experimental-note strong { color: var(--ink); }
+
       .ghost-wordmark {
         display: block;
         width: min(230px, 64vw);
@@ -454,10 +483,12 @@ target: http://127.0.0.1:5173/</pre>
               <div class="tiny-mark">
                 <img src="assets/ghost-tunnel-app-icon.png" alt="">
                 <span>ghostTunnel</span>
+                <span class="status-badge">Experimental</span>
               </div>
               <img class="ghost-wordmark" src="assets/ghost-tunnel-wordmark.png" alt="ghostTunnel">
               <h2>Share a localhost route without moving the app.</h2>
-              <p class="lead">ghostTunnel is the opt-in production-facing Localghost entrypoint for stable wildcard previews like <code>plan-summer-base-hamed.ghost.moonlit-otter.example</code>.</p>
+              <p class="lead">ghostTunnel is an opt-in preview of stable wildcard sharing routes like <code>plan-summer-base-hamed.ghost.moonlit-otter.example</code>.</p>
+              <p class="experimental-note"><strong>Experimental:</strong> configuration, transports, CLI behavior, and public APIs may change between releases. Do not rely on Ghost Tunnel for production-critical access.</p>
             </div>
             <div class="ghost-visual" aria-hidden="true">
               <img src="assets/ghost-tunnel-portal.png" alt="">
@@ -489,8 +520,8 @@ target: http://127.0.0.1:5173/</pre>
           <h2>Built to be boring where it matters</h2>
           <div class="grid">
             <article class="card">
-              <h3>CI before publish</h3>
-              <p><a href="https://github.com/hamedb89/localghost/actions/workflows/ci.yml">GitHub Actions</a> runs typecheck, build, site build, and npm package dry-run on Node 20 and 22.</p>
+              <h3>One-command releases</h3>
+              <p>Run <code>localghost release patch</code> to dispatch the guarded pipeline. <a href="https://github.com/hamedb89/localghost/actions/workflows/release.yml">GitHub Actions</a> verifies, versions, tags, publishes with provenance, and creates release notes.</p>
             </article>
             <article class="card">
               <h3>Small dependency surface</h3>
