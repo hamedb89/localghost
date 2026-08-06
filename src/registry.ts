@@ -63,6 +63,7 @@ export type LocalghostRegistry = {
   acquirePort(options: AcquireLocalghostPortOptions): Promise<LocalghostLease>;
   releasePort(options: { projectCwd?: string; instanceKey: string }): Promise<boolean>;
   read(): Promise<LocalghostRegistryData>;
+  prune(): Promise<{ removedLeases: number }>;
 };
 
 type RegistryLock = { pid: number; createdAt: number; token: string };
@@ -191,6 +192,18 @@ export function createLocalghostRegistry(options: LocalghostRegistryOptions = {}
     lockPath,
     ownerToken,
     read: readRegistry,
+    async prune() {
+      const releaseLock = await lock();
+      try {
+        const registry = await readRegistry();
+        const before = registry.leases.length;
+        pruneRegistry(registry, now(), isRunning);
+        await writeRegistry(registry);
+        return { removedLeases: before - registry.leases.length };
+      } finally {
+        await releaseLock();
+      }
+    },
     async acquirePort(acquireOptions) {
       const projectCwd = canonicalizeLocalghostProjectCwd(acquireOptions.projectCwd ?? cwd);
       if (!acquireOptions.instanceKey) throw new Error("instanceKey is required");

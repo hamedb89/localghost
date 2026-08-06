@@ -34,6 +34,10 @@ test("local CLI help is runnable without network update checks", async () => {
 
   const { stdout: devHelp } = await runCli(["dev", "--help"]);
   assert.match(devHelp, /--clean-caddy/);
+
+  const { stdout: repairHelp } = await runCli(["repair", "--help"]);
+  assert.match(repairHelp, /--reallocate-port/);
+  assert.match(repairHelp, /--prune-registry/);
 });
 
 test("agent guide describes the supported repository workflow", async () => {

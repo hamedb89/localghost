@@ -9,8 +9,9 @@ localghost - friendly local hostnames for app repos
 ```sh
 localghost [--cwd path] [--dry-run]
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
-localghost doctor
+localghost doctor [--cwd path] [--config file] [--config-pattern regex] [--json]
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
+localghost repair [--project name] [--config file] [--config-pattern regex] [--https|--ssl] [--trust] [--reallocate-port] [--prune-registry]
 localghost trust [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
 localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
@@ -71,13 +72,13 @@ Options:
 
 ### doctor
 
-Checks machine prerequisites.
+Checks machine prerequisites, the configured project port, and Localghost registry state. Use `--json` for agent-readable output. The command reports occupied ports, stale leases, and duplicate allocations without changing state.
 
 ```sh
 localghost doctor
 ```
 
-Currently checks Caddy and prints `brew install caddy` when missing.
+It checks Caddy and prints `brew install caddy` when missing.
 
 ### setup
 
@@ -97,11 +98,12 @@ localghost trust
 
 ### repair
 
-Reconciles the managed hosts block, regenerates and validates the Caddyfile, and refreshes project setup state. Use `--https --trust` to also re-run Caddy's local certificate trust step.
+Reconciles the managed hosts block, regenerates and validates the Caddyfile, and refreshes project setup state. Use `--https --trust` to also re-run Caddy's local certificate trust step. `--reallocate-port` selects and remembers a stable available replacement for an occupied port without editing `.localghost`. `--prune-registry` removes expired or dead leases.
 
 ```sh
 localghost repair
 localghost repair --https --trust
+localghost repair --reallocate-port --prune-registry
 ```
 
 ### teardown

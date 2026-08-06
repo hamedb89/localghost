@@ -187,7 +187,7 @@ export type {
 } from "./ghost-tunnel-store.js";
 export type { GhostTunnelHttpResponse, ResolveGhostTunnelRequestInput, ResolvedGhostTunnelRequest } from "./ghost-request.js";
 export type { LocalghostContext, LocalghostContextOptions, LocalghostProjectConfig, LocalghostProjectConfigResult } from "./context.js";
-export type { DoctorResult } from "./doctor.js";
+export type { DoctorOptions, DoctorResult } from "./doctor.js";
 export type {
   ActiveRelayRoute,
   RelayAccessMode,

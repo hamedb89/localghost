@@ -24,7 +24,8 @@ Use \`localghost dev\` only when the Caddy proxy should run without starting the
 - \`localghost repair\`: repair managed hosts and Caddy setup.
 - \`localghost ps --json\`: inspect Localghost-managed repositories, instances, and ports.
 - \`localghost routes\`: inspect hostname-to-port routing.
-- \`localghost doctor\`: check machine prerequisites.
+- \`localghost doctor\`: check machine prerequisites, ports, and registry state.
+- \`localghost repair --reallocate-port\`: move an occupied project port to a stable available port.
 
 ## Configuration
 

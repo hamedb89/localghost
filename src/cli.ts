@@ -735,9 +735,23 @@ program
 
 program
   .command("doctor")
-  .description("Check machine prerequisites")
-  .action(async () => {
-    const result = await runDoctor();
+  .description("Check machine prerequisites, ports, and Localghost registry state")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--config <file>", "Config file to inspect. Can be repeated.", collect, [])
+  .option("--config-pattern <regex>", "Regex for config filenames in the project root")
+  .option("--json", "Print raw JSON")
+  .action(async (options: ConfigCliOptions & { json?: boolean }) => {
+    const result = await runDoctor({
+      cwd: options.cwd,
+      ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
+      ...(options.configPattern ? { configPattern: options.configPattern } : {})
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
 
     if (result.caddy.found) {
       console.log(`Caddy: ${result.caddy.version ?? "found"}`);
@@ -745,6 +759,18 @@ program
       console.log("Caddy: missing");
       console.log(`Run: ${result.caddy.installHint}`);
       console.log("Localghost will not install it for you. No surprise spells.");
+    }
+
+    if (result.ports.configured === undefined) {
+      console.log("Port: could not resolve project configuration.");
+    } else {
+      console.log(`Port ${result.ports.configured}: ${result.ports.available ? "available" : "occupied"}`);
+    }
+    if (result.ports.staleLeases.length > 0) {
+      console.log(`Registry: ${result.ports.staleLeases.length} stale lease(s); run localghost repair --prune-registry.`);
+    }
+    for (const duplicate of result.ports.duplicateAllocations) {
+      console.log(`Registry: port ${duplicate.port} is allocated to ${duplicate.projects.join(", ")}.`);
     }
 
     if (!result.ok) {
@@ -901,7 +927,7 @@ program
 
 program
   .command("repair")
-  .description("Reconcile stale hosts, Caddyfile, setup state, and optional HTTPS trust")
+  .description("Reconcile stale setup, ports, registry state, and optional HTTPS trust")
   .option("--project <name>", "Managed /etc/hosts block name")
   .option("--cwd <path>", "Project directory", process.cwd())
   .option("--config <file>", "Config file to look for. Can be repeated.", collect, [])
@@ -909,14 +935,25 @@ program
   .option("--https", "Repair an HTTPS Caddy setup")
   .option("--ssl", "Alias for --https")
   .option("--trust", "Re-run Caddy's local HTTPS trust step")
+  .option("--reallocate-port", "Persist a stable replacement for an occupied port")
+  .option("--prune-registry", "Remove expired or dead registry leases")
   .action(async (
-    options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions & TrustCliOptions
+    options: ConfigCliOptions & { project?: string; reallocatePort?: boolean; pruneRegistry?: boolean } & ProxyModeCliOptions & TrustCliOptions
   ) => {
     assertLocalDevelopment("repair");
     printLocalghostBanner();
     await assertCaddyReady();
 
-    const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
+    const registry = createLocalghostRegistry({ cwd: options.cwd });
+    if (options.pruneRegistry) {
+      const result = await registry.prune();
+      console.log(`Pruned ${result.removedLeases} stale registry lease${result.removedLeases === 1 ? "" : "s"}.`);
+    }
+    const context = await resolveLocalghostContext({
+      ...contextOptionsFromCli(options),
+      dynamicPort: options.reallocatePort ? true : false,
+      ...(options.reallocatePort ? { reservePort: true, instanceKey: "run" } : {})
+    });
     const readiness = getSetupReadiness({
       ...options,
       https: context.https,
@@ -931,16 +968,23 @@ program
 
     warnAboutLocalMdns(context.entries);
     logDomainRoutes(context.entries, { https: context.https, ghostTunnel: context.ghostTunnel });
-    await runSetupFromReadiness(options.cwd, context.https, readiness);
+    try {
+      await runSetupFromReadiness(options.cwd, context.https, readiness);
 
-    if (options.trust) {
-      await runTrust(options.cwd, readiness.caddyfilePath);
+      if (options.trust) {
+        await runTrust(options.cwd, readiness.caddyfilePath);
+      }
+
+      if (context.port !== context.requestedPort) {
+        console.log(`Reallocated port ${context.requestedPort} -> ${context.port}.`);
+      }
+      console.log(`Repaired hosts: ${getSystemHostsPath()}`);
+      console.log(`Repaired Caddyfile: ${readiness.caddyfilePath}`);
+      console.log(`Repaired state: ${readiness.statePath}`);
+      console.log("Repair complete.");
+    } finally {
+      await context.releasePort?.();
     }
-
-    console.log(`Repaired hosts: ${getSystemHostsPath()}`);
-    console.log(`Repaired Caddyfile: ${readiness.caddyfilePath}`);
-    console.log(`Repaired state: ${readiness.statePath}`);
-    console.log("Repair complete.");
   });
 
 program

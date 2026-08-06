@@ -93,6 +93,8 @@ Check whether the machine is ready:
 localghost doctor
 ```
 
+Doctor also reports occupied configured ports, stale registry leases, and port allocations shared by multiple Localghost instances. Use `--json` for agent-readable output.
+
 Prepare `/etc/hosts` and the local Caddyfile:
 
 ```sh
@@ -110,6 +112,14 @@ Repair stale hosts, Caddy configuration, or setup state:
 ```sh
 localghost repair
 ```
+
+If an existing project port is occupied or was allocated incorrectly, ask Localghost to choose and remember the next available port:
+
+```sh
+localghost repair --reallocate-port
+```
+
+This does not edit `.localghost`; it records a stable runtime allocation in `~/.localghost` and regenerates the managed hosts and Caddy state from that allocation. To remove expired or dead leases as part of the repair, add `--prune-registry`.
 
 Run only the local proxy:
 
@@ -584,9 +594,9 @@ The app bundle is written to `dist/LocalghostWidget.app`.
 ```sh
 localghost [--cwd path] [--dry-run]
 localghost init [--write-scripts] [--config file] [--host host] [--port port]
-localghost doctor
+localghost doctor [--cwd path] [--config file] [--config-pattern regex] [--json]
 localghost setup [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
-localghost repair [--project name] [--config file] [--config-pattern regex] [--https|--ssl] [--trust]
+localghost repair [--project name] [--config file] [--config-pattern regex] [--https|--ssl] [--trust] [--reallocate-port] [--prune-registry]
 localghost trust [--project name] [--config file] [--config-pattern regex] [--https|--ssl]
 localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]

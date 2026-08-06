@@ -84,3 +84,20 @@ test("recovers a lock left by a dead process", async () => {
   const registry = createLocalghostRegistry({ stateRoot: root, availabilityCheck: available, pid: 108, isProcessRunning: () => false });
   assert.equal((await registry.acquirePort({ instanceKey: "web", startPort: 4600 })).port, 4600);
 });
+
+test("prunes expired and dead leases without changing allocations", async () => {
+  const root = await setup();
+  const registry = createLocalghostRegistry({ stateRoot: root, now: () => 1000, isProcessRunning: (pid) => pid === 108 });
+  await writeFile(join(root, "registry.json"), JSON.stringify({ version: 1, allocations: [
+    { projectCwd: "/project", instanceKey: "run", port: 4700, updatedAt: 1 }
+  ], leases: [
+    { projectCwd: "/dead", instanceKey: "run", port: 4701, pid: 999, acquiredAt: 0, expiresAt: 2000 },
+    { projectCwd: "/expired", instanceKey: "run", port: 4702, pid: 108, acquiredAt: 0, expiresAt: 999 }
+  ] }));
+
+  assert.deepEqual(await registry.prune(), { removedLeases: 2 });
+  assert.deepEqual((await registry.read()).allocations, [
+    { projectCwd: "/project", instanceKey: "run", port: 4700, updatedAt: 1 }
+  ]);
+  assert.deepEqual((await registry.read()).leases, []);
+});
