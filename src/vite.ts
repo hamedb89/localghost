@@ -298,13 +298,15 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
     console.log(`Created ${resolved.path}`);
   }
 
+  const wrapperManagedPort = Boolean(process.env.LOCALGHOST_PORT);
   const context = await resolveLocalghostContext({
     ...options,
     cwd,
     port: vitePort,
-    reservePort: true,
+    reservePort: !wrapperManagedPort,
     instanceKey: "vite",
     registryOwnerToken: options.registryOwnerToken ?? `${process.pid}:vite:${cwd}`,
+    ...(wrapperManagedPort ? { dynamicPort: false } : {}),
     ...(typeof https === "boolean" ? { https } : {})
   });
 
