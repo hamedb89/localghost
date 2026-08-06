@@ -7,6 +7,14 @@ export type CaddyModeOptions = {
   https?: boolean;
 };
 
+export type CaddyProcessStopResult = {
+  stopped: number[];
+  alreadyExited: number[];
+  failed: Array<{ pid: number; error: unknown }>;
+};
+
+export type CaddyProcessKiller = (pid: number, signal: NodeJS.Signals) => void;
+
 function shouldShowCaddyLogs() {
   return ["1", "true", "yes", "on"].includes((process.env.LOCALGHOST_CADDY_VERBOSE ?? "").toLowerCase());
 }
@@ -84,6 +92,32 @@ export function startCaddy(path: string) {
     cwd: dirname(path),
     stdio: caddyStdio()
   });
+}
+
+export function stopCaddyProcesses(
+  pids: Iterable<number>,
+  killProcess: CaddyProcessKiller = (pid, signal) => process.kill(pid, signal)
+): CaddyProcessStopResult {
+  const result: CaddyProcessStopResult = {
+    stopped: [],
+    alreadyExited: [],
+    failed: []
+  };
+
+  for (const pid of new Set(pids)) {
+    try {
+      killProcess(pid, "SIGINT");
+      result.stopped.push(pid);
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ESRCH") {
+        result.alreadyExited.push(pid);
+      } else {
+        result.failed.push({ pid, error });
+      }
+    }
+  }
+
+  return result;
 }
 
 export async function trustCaddy(path: string) {

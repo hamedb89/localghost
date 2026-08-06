@@ -16,6 +16,7 @@ localghost reset [--project name]
 localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
+localghost guide [--agent] [--json]
 localghost tunnel [--cwd path] [--config file] [--config-pattern regex] [--ghost-config file] [--target-host host]
 localghost release <patch|minor|major>
 localghost update [--json]
@@ -24,7 +25,7 @@ localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-
 localghost print [--config file] [--config-pattern regex]
 ```
 
-With no subcommand, Localghost detects npm, pnpm, Yarn, or Bun from `packageManager` or a lockfile, prefers a non-recursive `dev:raw` script, falls back to `dev`, and runs the result through the normal Caddy lifecycle. `--dry-run` prints the detected command without checking or changing machine setup. Set `command: ["<package-manager>", "dev:web"]` in `localghost.config.mjs` when inference should be explicit.
+With no subcommand, Localghost detects npm, pnpm, Yarn, or Bun from `packageManager` or a lockfile, prefers a non-recursive `dev:raw` script, falls back to `dev`, and runs the result through the normal Caddy lifecycle. Supported runtime flags such as `--https`, `--clean-caddy`, `--auto-repair`, and `--dynamic-port` are forwarded to that lifecycle. `--dry-run` prints the detected command without checking or changing machine setup. Set `command: ["<package-manager>", "dev:web"]` in `localghost.config.mjs` when inference should be explicit.
 
 For multiple independently started applications, configure `services` in `localghost.config.mjs`. Each service declares a unique name and host plus its project-relative working directory, requested port, and optional command. Bare `localghost` starts one Caddy process and all service commands, passes service-specific `LOCALGHOST_PORT`, `VITE_PORT`, and `LOCALGHOST_SERVICE` variables, and stops the group when any process exits.
 
@@ -136,6 +137,17 @@ Shows Localghost `dev` and `run` sessions that are currently running on the mach
 localghost ps
 localghost ps --json
 ```
+
+### guide
+
+Prints the recommended repository integration and command workflow. Use `--agent` for the coding-agent-oriented guide and `--json` for machine-readable integration hints.
+
+```sh
+localghost guide --agent
+localghost guide --agent --json
+```
+
+Localghost stores remembered project and instance port assignments in `~/.localghost`. Only Localghost-managed processes are represented there; unrelated processes are still checked by the operating system when a port is selected.
 
 ### tunnel (experimental)
 

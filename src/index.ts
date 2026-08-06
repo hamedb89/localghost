@@ -22,6 +22,7 @@ export {
   resolveDevHostsPath,
   sanitizeProjectName
 } from "./config.js";
+export { formatLocalghostAgentGuide, LOCALGHOST_AGENT_GUIDE } from "./guide.js";
 export {
   findGhostTunnelEntry,
   getGhostTunnelPath,
@@ -53,7 +54,7 @@ export {
   encodeGhostTunnelBody,
   resolveRedisGhostTunnelEnv
 } from "./ghost-tunnel-store.js";
-export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
+export { getCaddyfilePath, renderCaddyfile, runCaddy, startCaddy, stopCaddyProcesses, trustCaddy, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 export {
   renderGhostTunnelRelayOfflineResponse,
   renderGhostTunnelRouteMissingResponse,
@@ -86,6 +87,13 @@ export {
 export { detectPackageManager, initLocalghost, packageAddCommand, packageRunCommand } from "./init.js";
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
+export {
+  canonicalizeLocalghostProjectCwd,
+  createLocalghostRegistry,
+  getLocalghostRegistryRoot,
+  LOCALGHOST_REGISTRY_FILE,
+  LOCALGHOST_REGISTRY_LOCK_FILE
+} from "./registry.js";
 export {
   assertExactRelayHost,
   assertRelayLocalTarget,
@@ -145,7 +153,16 @@ export type {
   RegisterLocalghostSetupInput
 } from "./activity.js";
 export type { ConfigPattern, ReadDevHostsOptions, ResolvedDevHostsPath } from "./config.js";
-export type { CaddyModeOptions } from "./caddy.js";
+export type { CaddyModeOptions, CaddyProcessKiller, CaddyProcessStopResult } from "./caddy.js";
+export type {
+  AcquireLocalghostPortOptions,
+  LocalghostLease,
+  LocalghostRegistry,
+  LocalghostRegistryData,
+  LocalghostRegistryEntry,
+  LocalghostRegistryOptions,
+  PortAvailabilityCheck
+} from "./registry.js";
 export type { ReadGhostTunnelOptions } from "./ghost-file.js";
 export type {
   GhostTunnelAgent,

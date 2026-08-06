@@ -10,6 +10,7 @@ import {
   type ReadDevHostsOptions
 } from "./config.js";
 import { findAvailablePort } from "./port.js";
+import { createLocalghostRegistry } from "./registry.js";
 import type { DevHostEntry } from "./parse.js";
 import type { LocalghostServiceOptions } from "./command.js";
 import { resolveGhostTunnelConfig, type GhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
@@ -26,6 +27,10 @@ export type LocalghostContextOptions = {
   bindHost?: string | boolean;
   primaryHost?: string;
   dynamicPort?: boolean;
+  reservePort?: boolean;
+  instanceKey?: string;
+  reservedPorts?: Iterable<number>;
+  registryOwnerToken?: string;
   autoRepair?: boolean;
   command?: string[];
   services?: LocalghostServiceOptions[];
@@ -52,6 +57,7 @@ export type LocalghostContext = {
   wwwAlias: boolean;
   ghostTunnel: GhostTunnelConfig;
   projectConfigPath?: string;
+  releasePort?: () => Promise<boolean>;
 };
 
 export type LocalghostProjectConfig = Omit<LocalghostContextOptions, "cwd" | "localghostConfig">;
@@ -204,7 +210,24 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
   const autoRepair = merged.autoRepair ?? true;
   const bindHost = merged.bindHost ?? "127.0.0.1";
   const probeHost = typeof bindHost === "string" ? bindHost : "127.0.0.1";
-  const port = dynamicPort ? await findAvailablePort(requestedPort, { host: probeHost }) : requestedPort;
+  let port = requestedPort;
+  let releasePort: (() => Promise<boolean>) | undefined;
+  const reservePort = merged.reservePort ?? false;
+  const instanceKey = merged.instanceKey ?? "run";
+  if (reservePort && dynamicPort) {
+    const registry = createLocalghostRegistry({ cwd, ...(merged.registryOwnerToken ? { ownerToken: merged.registryOwnerToken } : {}) });
+    const lease = await registry.acquirePort({
+      projectCwd: cwd,
+      instanceKey,
+      startPort: requestedPort,
+      host: probeHost,
+      ...(options.reservedPorts ? { reservedPorts: options.reservedPorts } : {})
+    });
+    port = lease.port;
+    releasePort = () => registry.releasePort({ projectCwd: cwd, instanceKey });
+  } else if (dynamicPort) {
+    port = await findAvailablePort(requestedPort, { host: probeHost });
+  }
   const wwwAlias = merged.wwwAlias ?? true;
   const entries = wwwAlias
     ? addDefaultWwwAliases(withRuntimePort(configEntries, requestedPort, port))
@@ -240,6 +263,7 @@ export async function resolveLocalghostContext(options: LocalghostContextOptions
     https: merged.https ?? envHttps() ?? false,
     wwwAlias,
     ghostTunnel,
-    ...(projectConfig.path ? { projectConfigPath: projectConfig.path } : {})
+    ...(projectConfig.path ? { projectConfigPath: projectConfig.path } : {}),
+    ...(releasePort ? { releasePort } : {})
   };
 }

@@ -31,6 +31,18 @@ test("local CLI help is runnable without network update checks", async () => {
   assert.match(stdout, /setup/);
   assert.match(stdout, /run/);
   assert.match(stdout, /release/);
+
+  const { stdout: devHelp } = await runCli(["dev", "--help"]);
+  assert.match(devHelp, /--clean-caddy/);
+});
+
+test("agent guide describes the supported repository workflow", async () => {
+  const { stdout } = await runCli(["guide", "--agent", "--json"]);
+  const guide = JSON.parse(stdout);
+
+  assert.equal(guide.preferredScript, "localghost");
+  assert.equal(guide.proxyOnlyCommand, "localghost dev");
+  assert.equal(guide.userState, "~/.localghost");
 });
 
 test("release command dispatches the requested semantic bump", async () => {

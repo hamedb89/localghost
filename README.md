@@ -79,6 +79,8 @@ Localghost detects the package manager, prefers a non-recursive `dev:raw` script
 npm exec localghost -- --dry-run
 ```
 
+Supported runtime flags such as `--https`, `--clean-caddy`, `--auto-repair`, and `--dynamic-port` are forwarded by the bare command to the underlying run lifecycle.
+
 Create the repo-local hostname contract:
 
 ```sh
@@ -139,6 +141,15 @@ See active Localghost sessions:
 localghost ps
 localghost ps --json
 ```
+
+Give coding agents the supported workflow and repository conventions:
+
+```sh
+localghost guide --agent
+localghost guide --agent --json
+```
+
+Localghost remembers project and instance port assignments in user-level state under `~/.localghost`. The registry is used only for Localghost-managed processes; the operating-system port check remains authoritative for unrelated processes.
 
 Check for updates:
 

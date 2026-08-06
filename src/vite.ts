@@ -41,6 +41,7 @@ export type LocalGhostPluginOptions = {
   localghostConfig?: string | false;
   wwwAlias?: boolean;
   ghostTunnel?: GhostTunnelOptions;
+  registryOwnerToken?: string;
   verbose?: boolean;
 };
 
@@ -301,6 +302,9 @@ async function ensureLocalghostContext(options: LocalGhostPluginOptions, vitePor
     ...options,
     cwd,
     port: vitePort,
+    reservePort: true,
+    instanceKey: "vite",
+    registryOwnerToken: options.registryOwnerToken ?? `${process.pid}:vite:${cwd}`,
     ...(typeof https === "boolean" ? { https } : {})
   });
 
@@ -544,6 +548,7 @@ export function localGhostPlugin(options: LocalGhostPluginOptions = {}): Plugin 
       const cleanup = () => {
         cleanupActivity();
         cleanupGhostMenu?.();
+        void resolvedContext?.releasePort?.();
       };
 
       server.httpServer?.once("close", cleanup);

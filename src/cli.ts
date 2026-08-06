@@ -15,7 +15,7 @@ import {
 } from "./activity.js";
 import { getProjectName, readDevHosts, resolveDevHostsPath, sanitizeProjectName, type ReadDevHostsOptions } from "./config.js";
 import { renderLocalghostBanner } from "./brand.js";
-import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile, startCaddy, trustCaddy } from "./caddy.js";
+import { getCaddyfilePath, renderCaddyfile, stopCaddyProcesses, validateCaddyfile, writeCaddyfile, startCaddy, trustCaddy } from "./caddy.js";
 import {
   detectDevCommand,
   detectDevServices,
@@ -31,8 +31,10 @@ import { startGhostTunnelAgent } from "./ghost-agent.js";
 import { createRedisGhostTunnelStoreFromEnv } from "./ghost-tunnel-store.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { initLocalghost, type PackageManager } from "./init.js";
+import { formatLocalghostAgentGuide } from "./guide.js";
 import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
+import { createLocalghostRegistry } from "./registry.js";
 import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes, formatGhostTunnel } from "./routes.js";
 import { getLocalghostStatePath, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
@@ -126,6 +128,10 @@ type AutoRepairCliOptions = {
   autoRepair?: boolean;
 };
 
+type CleanCaddyCliOptions = {
+  cleanCaddy?: boolean;
+};
+
 function contextOptionsFromCli(options: ConfigCliOptions & { project?: string } & ProxyModeCliOptions & AutoRepairCliOptions) {
   return {
     cwd: options.cwd,
@@ -154,6 +160,28 @@ async function assertCaddyReady() {
     `Install it with: ${caddy.installHint}`,
     "Localghost will not install it for you. No surprise spells."
   ].join("\n"));
+}
+
+function cleanManagedCaddyProcesses() {
+  const runs = listLocalghostRuns();
+  const caddyPids = runs.flatMap((run) => run.caddyPid ? [run.caddyPid] : []);
+  const result = stopCaddyProcesses(caddyPids);
+
+  for (const run of runs) {
+    if (run.caddyPid && (result.stopped.includes(run.caddyPid) || result.alreadyExited.includes(run.caddyPid))) {
+      unregisterLocalghostRun(run.id);
+    }
+  }
+
+  if (result.stopped.length > 0) {
+    console.log(`Stopped ${result.stopped.length} Localghost-managed Caddy process${result.stopped.length === 1 ? "" : "es"}.`);
+  }
+  if (result.alreadyExited.length > 0) {
+    console.log(`Removed ${result.alreadyExited.length} stale Localghost Caddy record${result.alreadyExited.length === 1 ? "" : "s"}.`);
+  }
+  if (result.failed.length > 0) {
+    throw new Error(`Could not stop Localghost-managed Caddy PID(s): ${result.failed.map(({ pid }) => pid).join(", ")}.`);
+  }
 }
 
 function existingTrustMarkers(cwd: string) {
@@ -377,27 +405,22 @@ function registerCleanup(id: string) {
 
 async function resolveServiceRuntimeEntries(
   services: DetectedDevService[],
-  dynamicPort: boolean
+  dynamicPort: boolean,
+  projectCwd: string
 ) {
   const usedPorts = new Set<number>();
-  const resolved = [];
+  const resolved: Array<DetectedDevService & { port: number; entry: DevHostEntry }> = [];
+  const registry = dynamicPort ? createLocalghostRegistry({ cwd: projectCwd, ownerToken: `${process.pid}:services:${projectCwd}` }) : undefined;
 
   for (const service of services) {
     let port = service.requestedPort;
     if (dynamicPort) {
-      let found = false;
-      for (let offset = 0; offset < 50; offset += 1) {
-        const candidate = service.requestedPort + offset;
-        if (candidate > 65_535 || usedPorts.has(candidate)) continue;
-        if (await isPortAvailable(candidate)) {
-          port = candidate;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        throw new Error(`No available port found for service ${service.name} from ${service.requestedPort}.`);
-      }
+      const lease = await registry!.acquirePort({
+        instanceKey: `service:${service.name}`,
+        startPort: service.requestedPort,
+        reservedPorts: usedPorts
+      });
+      port = lease.port;
     } else if (usedPorts.has(port)) {
       throw new Error(`Services cannot start separate commands on the same fixed port: ${port}.`);
     }
@@ -414,7 +437,13 @@ async function resolveServiceRuntimeEntries(
     });
   }
 
-  return resolved;
+  return {
+    services: resolved,
+    release: async () => {
+      if (!registry) return;
+      await Promise.all(resolved.map((service) => registry.releasePort({ instanceKey: `service:${service.name}` })));
+    }
+  };
 }
 
 async function waitForServicePorts(entries: DevHostEntry[], timeoutMs = 10_000) {
@@ -442,18 +471,20 @@ async function runDetectedServices(options: {
   assertLocalDevelopment("run");
   await assertCaddyReady();
 
-  const runtimeServices = await resolveServiceRuntimeEntries(options.services, options.dynamicPort);
-  const entries = runtimeServices.map((service) => service.entry);
-  const readiness = getSetupReadiness({
+  const runtime = await resolveServiceRuntimeEntries(options.services, options.dynamicPort, options.cwd);
+  try {
+    const runtimeServices = runtime.services;
+    const entries = runtimeServices.map((service) => service.entry);
+    const readiness = getSetupReadiness({
     cwd: options.cwd,
     https: options.https,
     ignoreCaddyfile: true,
     entries,
     configPath: options.configPath,
     projectName: options.projectName
-  });
+    });
 
-  if (!readiness.ready) {
+    if (!readiness.ready) {
     if (!options.autoRepair) {
       throw new Error([
         "Localghost setup is missing or stale.",
@@ -463,21 +494,21 @@ async function runDetectedServices(options: {
     }
     console.log("Localghost setup is stale; repairing it now.");
     await runSetupFromReadiness(options.cwd, options.https, readiness);
-  }
+    }
 
-  for (const service of runtimeServices) {
+    for (const service of runtimeServices) {
     if (service.port !== service.requestedPort) {
       console.log(`${service.name}: port ${service.requestedPort} is busy; using ${service.port}.`);
     }
-  }
+    }
 
-  const caddyfile = await writeCaddyfile(entries, options.cwd, { https: options.https });
-  await validateCaddyfile(caddyfile);
-  const caddy = startCaddy(caddyfile);
-  const caddyExit = caddy.catch((error: unknown) => {
+    const caddyfile = await writeCaddyfile(entries, options.cwd, { https: options.https });
+    await validateCaddyfile(caddyfile);
+    const caddy = startCaddy(caddyfile);
+    const caddyExit = caddy.catch((error: unknown) => {
     if (!caddy.killed) throw error;
-  });
-  const children = runtimeServices.map((service) => execa(service.command[0]!, service.command.slice(1), {
+    });
+    const children = runtimeServices.map((service) => execa(service.command[0]!, service.command.slice(1), {
     cwd: service.cwd,
     stdio: "inherit",
     env: {
@@ -487,9 +518,9 @@ async function runDetectedServices(options: {
       LOCALGHOST_SERVICE: service.name,
       VITE_PORT: String(service.port)
     }
-  }));
-  const caddyPid = maybePid(caddy.pid);
-  const runRecord = registerLocalghostRun({
+    }));
+    const caddyPid = maybePid(caddy.pid);
+    const runRecord = registerLocalghostRun({
     mode: "run",
     cwd: options.cwd,
     projectName: options.projectName,
@@ -500,27 +531,30 @@ async function runDetectedServices(options: {
     https: options.https,
     dynamicPort: options.dynamicPort,
     entries
-  });
-  const cleanupRun = registerCleanup(runRecord.id);
-  const processExit = Promise.race([caddyExit, ...children]);
+    });
+    const cleanupRun = registerCleanup(runRecord.id);
+    const processExit = Promise.race([caddyExit, ...children]);
 
-  try {
-    const ready = await Promise.race([
+    try {
+      const ready = await Promise.race([
       waitForServicePorts(entries),
       processExit.then(() => false)
-    ]);
-    if (ready) {
+      ]);
+      if (ready) {
       console.log("");
       logDomainRoutes(entries, { https: options.https });
-    }
-    await processExit;
-  } finally {
-    for (const child of children) {
+      }
+      await processExit;
+    } finally {
+      for (const child of children) {
       if (!child.killed) child.kill("SIGINT");
+      }
+      if (!caddy.killed) caddy.kill("SIGINT");
+      await Promise.allSettled([caddyExit, ...children]);
+      cleanupRun();
     }
-    if (!caddy.killed) caddy.kill("SIGINT");
-    await Promise.allSettled([caddyExit, ...children]);
-    cleanupRun();
+  } finally {
+    await runtime.release();
   }
 }
 
@@ -688,6 +722,15 @@ program
     for (const step of result.nextSteps) {
       console.log(`  ${step}`);
     }
+  });
+
+program
+  .command("guide")
+  .description("Explain the recommended Localghost workflow to humans or agents")
+  .option("--agent", "Print the agent-oriented workflow guide")
+  .option("--json", "Print the guide as JSON")
+  .action((options: { agent?: boolean; json?: boolean }) => {
+    console.log(formatLocalghostAgentGuide(options.json ? "json" : "text"));
   });
 
 program
@@ -1077,12 +1120,15 @@ program
   .option("--ssl", "Alias for --https")
   .option("--setup", "Alias for automatic repair when setup is missing or stale")
   .option("--auto-repair [yes|no]", "Repair stale setup before starting (default: yes)", parseBooleanLike)
+  .option("--clean-caddy", "Stop Localghost-managed Caddy processes before starting")
   .option("--trust", "Trust Caddy's local HTTPS CA before starting the proxy")
   .action(async (
-    options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions
+    options: ConfigCliOptions & { project?: string; setup?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions & CleanCaddyCliOptions
   ) => {
     assertLocalDevelopment("dev");
     await assertCaddyReady();
+
+    if (options.cleanCaddy) cleanManagedCaddyProcesses();
 
     const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
     const https = context.https;
@@ -1159,15 +1205,18 @@ program
   .option("--ssl", "Alias for --https")
   .option("--setup", "Alias for automatic repair when setup is missing or stale")
   .option("--auto-repair [yes|no]", "Repair stale setup before starting (default: yes)", parseBooleanLike)
+  .option("--clean-caddy", "Stop Localghost-managed Caddy processes before starting")
   .option("--trust", "Trust Caddy's local HTTPS CA before starting the child command")
   .option("--dynamic-port [yes|no]", "Use the requested port if free, otherwise continue upward", parseBooleanLike)
   .argument("<command...>", "Command to run after --, for example: localghost run -- vite")
   .action(async (
     command: string[],
-    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions
+    options: ConfigCliOptions & { project?: string; port?: number; setup?: boolean; dynamicPort?: boolean } & ProxyModeCliOptions & TrustCliOptions & AutoRepairCliOptions & CleanCaddyCliOptions
   ) => {
     assertLocalDevelopment("run");
     await assertCaddyReady();
+
+    if (options.cleanCaddy) cleanManagedCaddyProcesses();
 
     const context = await resolveLocalghostContext({
       cwd: options.cwd,
@@ -1175,6 +1224,8 @@ program
       ...(options.config && options.config.length > 0 ? { configFiles: options.config } : {}),
       ...(options.configPattern ? { configPattern: options.configPattern } : {}),
       ...(options.port ? { port: options.port } : {}),
+      reservePort: true,
+      instanceKey: "run",
       ...(useHttps(options) ? { https: true } : {}),
       ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {}),
       ...(typeof options.autoRepair === "boolean" ? { autoRepair: options.autoRepair } : {})
@@ -1278,6 +1329,7 @@ program
       stopCaddy();
       await Promise.allSettled([child, caddyExit]);
       cleanupRun();
+      await context.releasePort?.();
     }
   });
 
@@ -1377,6 +1429,7 @@ function readImplicitInvocation(args: string[]) {
   let cwd = process.cwd();
   let dryRun = false;
   let updateCheck = true;
+  const forwardedArgs: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -1387,6 +1440,30 @@ function readImplicitInvocation(args: string[]) {
     }
     if (arg === "--no-update-check") {
       updateCheck = false;
+      continue;
+    }
+    if (["--clean-caddy", "--https", "--ssl", "--setup", "--trust"].includes(arg)) {
+      forwardedArgs.push(arg);
+      continue;
+    }
+    if (arg === "--auto-repair" || arg === "--dynamic-port") {
+      const value = args[index + 1];
+      forwardedArgs.push(arg);
+      if (value && !value.startsWith("--")) {
+        forwardedArgs.push(value);
+        index += 1;
+      }
+      continue;
+    }
+    if (arg === "--port" || arg === "--project" || arg === "--config" || arg === "--config-pattern") {
+      const value = args[index + 1];
+      if (!value) throw new Error(`${arg} requires a value.`);
+      forwardedArgs.push(arg, value);
+      index += 1;
+      continue;
+    }
+    if (["--auto-repair=", "--dynamic-port=", "--port=", "--project=", "--config=", "--config-pattern="].some((prefix) => arg.startsWith(prefix))) {
+      forwardedArgs.push(arg);
       continue;
     }
     if (arg === "--cwd") {
@@ -1403,7 +1480,17 @@ function readImplicitInvocation(args: string[]) {
     return null;
   }
 
-  return { cwd, dryRun, updateCheck };
+  return { cwd, dryRun, updateCheck, forwardedArgs };
+}
+
+function hasForwardedFlag(args: string[], ...flags: string[]) {
+  return args.some((arg) => flags.includes(arg));
+}
+
+function forwardedBoolean(args: string[], name: string) {
+  const inline = args.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return parseBooleanLike(inline.slice(name.length + 1));
+  return args.includes(name) ? true : undefined;
 }
 
 async function main() {
@@ -1424,14 +1511,16 @@ async function main() {
     console.log(formatDetectedDevServices(services));
     if (implicit.dryRun) return;
 
+    if (hasForwardedFlag(implicit.forwardedArgs, "--clean-caddy")) cleanManagedCaddyProcesses();
+
     await runDetectedServices({
       cwd: implicit.cwd,
       services,
       configPath: projectConfig.path,
       projectName: sanitizeProjectName(projectConfig.config.project ?? getProjectName(implicit.cwd)),
-      https: projectConfig.config.https ?? false,
-      dynamicPort: projectConfig.config.dynamicPort ?? true,
-      autoRepair: projectConfig.config.autoRepair ?? true
+      https: hasForwardedFlag(implicit.forwardedArgs, "--https", "--ssl") || (projectConfig.config.https ?? false),
+      dynamicPort: forwardedBoolean(implicit.forwardedArgs, "--dynamic-port") ?? projectConfig.config.dynamicPort ?? true,
+      autoRepair: forwardedBoolean(implicit.forwardedArgs, "--auto-repair") ?? projectConfig.config.autoRepair ?? true
     });
     await maybeNotifyAboutUpdate({ disabled: !implicit.updateCheck });
     return;
@@ -1450,6 +1539,7 @@ async function main() {
     process.argv[1] ?? "localghost",
     ...(implicit.updateCheck ? [] : ["--no-update-check"]),
     "run",
+    ...implicit.forwardedArgs,
     "--cwd",
     implicit.cwd,
     "--",
