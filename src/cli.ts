@@ -41,6 +41,7 @@ import { getLocalghostStatePath, patchLocalghostState, readLocalghostState, writ
 import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
 import type { GhostTunnelConfig } from "./tunnel.js";
 import { execa } from "execa";
+import { signalManagedProcess, signalManagedProcessPid } from "./process.js";
 
 function warnAboutLocalMdns(entries: ReturnType<typeof readDevHosts>) {
   const localHosts = findLocalMdnsHosts(entries);
@@ -164,11 +165,19 @@ async function assertCaddyReady() {
 
 function cleanManagedCaddyProcesses() {
   const runs = listLocalghostRuns();
-  const caddyPids = runs.flatMap((run) => run.caddyPid ? [run.caddyPid] : []);
-  const result = stopCaddyProcesses(caddyPids);
+  const legacyPids = runs.flatMap((run) => run.caddyPid && !run.caddyPgid ? [run.caddyPid] : []);
+  const managedPgid = runs.flatMap((run) => run.caddyPgid ? [run.caddyPgid] : []);
+  const legacyResult = stopCaddyProcesses(legacyPids);
+  const managedResult = stopCaddyProcesses(managedPgid, signalManagedProcessPid);
+  const result = {
+    stopped: [...legacyResult.stopped, ...managedResult.stopped],
+    alreadyExited: [...legacyResult.alreadyExited, ...managedResult.alreadyExited],
+    failed: [...legacyResult.failed, ...managedResult.failed]
+  };
 
   for (const run of runs) {
-    if (run.caddyPid && (result.stopped.includes(run.caddyPid) || result.alreadyExited.includes(run.caddyPid))) {
+    const caddyIdentity = run.caddyPgid ?? run.caddyPid;
+    if (caddyIdentity && (result.stopped.includes(caddyIdentity) || result.alreadyExited.includes(caddyIdentity))) {
       unregisterLocalghostRun(run.id);
     }
   }
@@ -509,8 +518,9 @@ async function runDetectedServices(options: {
     if (!caddy.killed) throw error;
     });
     const children = runtimeServices.map((service) => execa(service.command[0]!, service.command.slice(1), {
-    cwd: service.cwd,
-    stdio: "inherit",
+      cwd: service.cwd,
+      stdio: "inherit",
+      detached: process.platform !== "win32",
     env: {
       ...process.env,
       LOCALGHOST_PORT: String(service.port),
@@ -527,6 +537,7 @@ async function runDetectedServices(options: {
     configPath: options.configPath,
     caddyfilePath: caddyfile,
     ...(caddyPid ? { caddyPid } : {}),
+    ...(caddyPid ? { caddyPgid: caddyPid } : {}),
     childCommand: ["services", ...runtimeServices.map((service) => service.name)],
     https: options.https,
     dynamicPort: options.dynamicPort,
@@ -547,9 +558,9 @@ async function runDetectedServices(options: {
       await processExit;
     } finally {
       for (const child of children) {
-      if (!child.killed) child.kill("SIGINT");
+        signalManagedProcess(child, "SIGINT");
       }
-      if (!caddy.killed) caddy.kill("SIGINT");
+      signalManagedProcess(caddy, "SIGINT");
       await Promise.allSettled([caddyExit, ...children]);
       cleanupRun();
     }
@@ -1214,7 +1225,7 @@ program
         ...(typeof options.trust === "boolean" ? { trust: options.trust } : {})
       });
     } catch (error) {
-      if (!caddy.killed) caddy.kill("SIGINT");
+      signalManagedProcess(caddy, "SIGINT");
       throw error;
     }
     const caddyPid = maybePid(caddy.pid);
@@ -1225,6 +1236,7 @@ program
       configPath: readiness.configPath,
       caddyfilePath: caddyfile,
       ...(caddyPid ? { caddyPid } : {}),
+      ...(caddyPid ? { caddyPgid: caddyPid } : {}),
       https,
       entries: readiness.entries
     });
@@ -1322,7 +1334,7 @@ program
         ...(typeof options.trust === "boolean" ? { trust: options.trust } : {})
       });
     } catch (error) {
-      if (!caddy.killed) caddy.kill("SIGINT");
+      signalManagedProcess(caddy, "SIGINT");
       throw error;
     }
     const [binary, ...args] = command;
@@ -1333,6 +1345,7 @@ program
     const child = execa(binary, args, {
       cwd: options.cwd,
       stdio: "inherit",
+      detached: process.platform !== "win32",
       env: {
         ...process.env,
         LOCALGHOST_PORT: String(context.port),
@@ -1349,6 +1362,7 @@ program
       configPath: context.configPath,
       caddyfilePath: caddyfile,
       ...(caddyPid ? { caddyPid } : {}),
+      ...(caddyPid ? { caddyPgid: caddyPid } : {}),
       ...(childPid ? { childPid } : {}),
       childCommand: command,
       https,
@@ -1360,10 +1374,10 @@ program
     const cleanupRun = registerCleanup(runRecord.id);
 
     const stopCaddy = () => {
-      if (!caddy.killed) caddy.kill("SIGINT");
+      signalManagedProcess(caddy, "SIGINT");
     };
     const stopChild = () => {
-      if (!child.killed) child.kill("SIGINT");
+      signalManagedProcess(child, "SIGINT");
     };
 
     try {

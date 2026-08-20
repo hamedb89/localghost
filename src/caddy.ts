@@ -90,7 +90,8 @@ export async function runCaddy(path: string) {
 export function startCaddy(path: string) {
   return execa("caddy", ["run", "--config", path], {
     cwd: dirname(path),
-    stdio: caddyStdio()
+    stdio: caddyStdio(),
+    detached: process.platform !== "win32"
   });
 }
 

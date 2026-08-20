@@ -18,6 +18,7 @@ export type LocalghostRunRecord = {
   configPath?: string;
   caddyfilePath?: string;
   caddyPid?: number;
+  caddyPgid?: number;
   childPid?: number;
   childCommand?: string[];
   https?: boolean;
@@ -145,6 +146,7 @@ export function registerLocalghostRun(input: RegisterLocalghostRunInput, path = 
     ...(input.configPath ? { configPath: input.configPath } : {}),
     ...(input.caddyfilePath ? { caddyfilePath: input.caddyfilePath } : {}),
     ...(input.caddyPid ? { caddyPid: input.caddyPid } : {}),
+    ...(input.caddyPgid ? { caddyPgid: input.caddyPgid } : {}),
     ...(input.childPid ? { childPid: input.childPid } : {}),
     ...(input.childCommand ? { childCommand: input.childCommand } : {}),
     ...(typeof input.https === "boolean" ? { https: input.https } : {}),

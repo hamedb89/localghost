@@ -87,6 +87,7 @@ export {
 export { detectPackageManager, initLocalghost, packageAddCommand, packageRunCommand } from "./init.js";
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
+export { signalManagedProcess, signalManagedProcessPid } from "./process.js";
 export {
   canonicalizeLocalghostProjectCwd,
   createLocalghostRegistry,
