@@ -37,7 +37,7 @@ jobs:
         run: corepack npm ci
 
       - name: Verify package and site
-        run: corepack npm run release:check
+        run: ./bin/ghost check
 
   e2e:
     name: Runtime E2E

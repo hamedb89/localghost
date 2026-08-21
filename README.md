@@ -640,6 +640,7 @@ import { localGhostPlugin } from "@hamedb89/localghost/vite";
 - Preview the exact Pages artifact locally with `npm run site:serve`, then open `http://127.0.0.1:4173/`.
 - npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
 - To release the CLI, run `localghost release patch`, `localghost release minor`, or `localghost release major`. The command dispatches the **Release** workflow from `main`; it synchronizes version metadata, verifies the package and runtime matrix, commits and tags the bump, publishes npm, and creates a GitHub Release with generated notes. GitHub CLI must be installed and authenticated.
+- From this repository, `./bin/ghost release minor` (or the shorter `./bin/c release minor`) pushes `main` and dispatches the same guarded GitHub release workflow. Use `./bin/ghost check` for the release verification locally, `./bin/ghost release status` to inspect recent runs, or `./bin/ghost release retry v0.2.0` to retry publishing an existing tag.
 - Runtime dependencies are intentionally small: `commander` and `execa`. Vite is an optional peer dependency.
 - No postinstall scripts, hidden Homebrew installs, surprise browser tabs, or broad hosts-file rewrites.
 - Update checks are best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.

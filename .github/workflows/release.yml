@@ -72,7 +72,7 @@ jobs:
           echo "tag=v${VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify package and site
-        run: npm run release:check
+        run: ./bin/ghost check
 
       - name: Verify runtime E2E
         run: npm run test:e2e
