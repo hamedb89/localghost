@@ -8,6 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ghost check
+  ghost consumer test <name> --repo <path> [--keep] -- <command> [...args]
   ghost release [patch|minor|major]
   ghost release retry <vX.Y.Z>
   ghost release status
@@ -16,6 +17,11 @@ EOF
 
 if [ "${1:-}" = "check" ] && [ "$#" -eq 1 ]; then
   exec npm run release:check
+fi
+
+if [ "${1:-}" = "consumer" ]; then
+  shift
+  exec node "$repo_root/scripts/consumer-worktree.mjs" "$@"
 fi
 
 if [ "${1:-}" != "release" ]; then

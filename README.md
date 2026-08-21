@@ -54,6 +54,14 @@ yarn dlx @hamedb89/localghost
 bunx --package @hamedb89/localghost localghost
 ```
 
+Test a real consumer repository against the local checkout without changing its manifest or working tree:
+
+```sh
+./bin/ghost consumer test faaast --repo /path/to/faaast-landing -- pnpm run bench:noop
+```
+
+The command creates a detached worktree, installs its dependencies, builds and links the local Localghost checkout, runs the command inside the worktree, and removes the worktree afterward. Add `--keep` before `--` when inspecting the isolated checkout after a failure.
+
 On the first interactive run, Localghost can create `.localghost`, explain the `/etc/hosts` change, write `ops/local/Caddyfile`, and print the browser-facing URL:
 
 ```txt
