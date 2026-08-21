@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { getProjectName, LOCALGHOST_CONFIG_FILE, sanitizeProjectName } from "./config.js";
 import { writeTextFile } from "./fs.js";
 
@@ -31,6 +31,18 @@ export function detectPackageManager(cwd = process.cwd()): PackageManager {
   if (existsSync(join(cwd, "yarn.lock"))) return "yarn";
   if (existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb"))) return "bun";
   return "npm";
+}
+
+export function isPnpmWorkspaceRoot(cwd = process.cwd()): boolean {
+  const target = resolve(cwd);
+  let current = target;
+
+  while (true) {
+    if (existsSync(join(current, "pnpm-workspace.yaml"))) return current === target;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
 }
 
 export function packageRunCommand(packageManager: PackageManager, script: string): string {

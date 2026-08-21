@@ -132,6 +132,22 @@ Prints Localghost's project-local state file and setup readiness. Pass `--ready`
 localghost status --ready
 ```
 
+Pass `--ports` to inspect remembered allocations, active Localghost leases, and ports used by active sessions without changing registry state. It also probes a bounded range for free ports; use `--from` and `--count` to control that range. Add `--json` for machine-readable output.
+
+```sh
+localghost status --ports
+localghost status --ports --from 3000 --count 5 --json
+```
+
+### test
+
+Runs a test command with an isolated, dynamically selected Localghost port. Use a unique `--instance` value for parallel runs. The lease is renewed while the command runs and released when it exits.
+
+```sh
+localghost test --instance smoke-1 -- npm test
+localghost test --instance smoke-2 -- npm test
+```
+
 ### ps
 
 Shows Localghost `dev` and `run` sessions that are currently running on the machine. Stale records are pruned automatically when their wrapper process is gone. Each route also reports whether its upstream `127.0.0.1:<port>` is listening. Pass `--json` for menu bar helpers or other polling tools.

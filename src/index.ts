@@ -85,6 +85,7 @@ export {
   upsertManagedBlock
 } from "./hosts-file.js";
 export { detectPackageManager, initLocalghost, packageAddCommand, packageRunCommand } from "./init.js";
+export { createLocalghostTestSession } from "./test-session.js";
 export { findLocalMdnsHosts, parseDevHosts } from "./parse.js";
 export { findAvailablePort, isPortAvailable } from "./port.js";
 export { signalManagedProcess, signalManagedProcessPid } from "./process.js";
@@ -164,6 +165,7 @@ export type {
   LocalghostRegistryOptions,
   PortAvailabilityCheck
 } from "./registry.js";
+export type { LocalghostTestSession, LocalghostTestSessionOptions } from "./test-session.js";
 export type { ReadGhostTunnelOptions } from "./ghost-file.js";
 export type {
   GhostTunnelAgent,

@@ -4,8 +4,10 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
 import {
   getLocalghostActivityPath,
+  isProcessRunning,
   listLocalghostSetups,
   listLocalghostRuns,
+  readLocalghostActivity,
   registerLocalghostRun,
   registerLocalghostSetup,
   unregisterLocalghostSetup,
@@ -30,7 +32,8 @@ import { listGhostTunnelEntries } from "./ghost-file.js";
 import { startGhostTunnelAgent } from "./ghost-agent.js";
 import { createRedisGhostTunnelStoreFromEnv } from "./ghost-tunnel-store.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
-import { detectPackageManager, initLocalghost, type PackageManager } from "./init.js";
+import { detectPackageManager, initLocalghost, isPnpmWorkspaceRoot, type PackageManager } from "./init.js";
+import { createLocalghostTestSession } from "./test-session.js";
 import { formatLocalghostAgentGuide } from "./guide.js";
 import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
@@ -83,6 +86,15 @@ function parsePort(value: string) {
   }
 
   return port;
+}
+
+function parseCount(value: string) {
+  const count = Number.parseInt(value, 10);
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    throw new InvalidArgumentError("Count must be a number between 1 and 100.");
+  }
+
+  return count;
 }
 
 function parsePackageManager(value: string): PackageManager {
@@ -391,6 +403,87 @@ type LocalghostInstanceView = {
   https?: boolean;
   routes: LocalghostRouteView[];
 };
+
+type LocalghostPortStatus = {
+  port: number;
+  state: "active" | "stale" | "occupied" | "available";
+  projectCwd: string;
+  instanceKey: string;
+  available: boolean;
+  pid?: number;
+  processRunning?: boolean;
+  expiresAt?: number;
+};
+
+async function readPortStatuses() {
+  const registry = createLocalghostRegistry();
+  const data = await registry.read();
+  const rows = new Map<string, LocalghostPortStatus>();
+  const now = Date.now();
+
+  for (const allocation of data.allocations) {
+    rows.set(`${allocation.projectCwd}\u0000${allocation.instanceKey}`, {
+      port: allocation.port,
+      state: "available",
+      projectCwd: allocation.projectCwd,
+      instanceKey: allocation.instanceKey,
+      available: true
+    });
+  }
+
+  for (const lease of data.leases) {
+    const running = lease.expiresAt > now && isProcessRunning(lease.pid);
+    const key = `${lease.projectCwd}\u0000${lease.instanceKey}`;
+    rows.set(key, {
+      port: lease.port,
+      state: running ? "active" : "stale",
+      projectCwd: lease.projectCwd,
+      instanceKey: lease.instanceKey,
+      available: false,
+      pid: lease.pid,
+      processRunning: isProcessRunning(lease.pid),
+      expiresAt: lease.expiresAt
+    });
+  }
+
+  const activity = readLocalghostActivity();
+  for (const run of activity.runs) {
+    const ports = [...new Set(run.entries.map((entry) => entry.port))];
+    for (const port of ports) {
+      const key = `${run.cwd}\u0000activity:${run.id}:${port}`;
+      if (!rows.has(key)) {
+        const running = isProcessRunning(run.pid);
+        rows.set(key, {
+          port,
+          state: running ? "active" : "stale",
+          projectCwd: run.cwd,
+          instanceKey: `activity:${run.mode}`,
+          available: false,
+          pid: run.pid,
+          processRunning: running
+        });
+      }
+    }
+  }
+
+  const statuses = await Promise.all([...rows.values()].map(async (row) => {
+    if (row.state === "active" || row.state === "stale") {
+      return { ...row, available: await isPortAvailable(row.port) };
+    }
+    const available = await isPortAvailable(row.port);
+    return { ...row, available, state: available ? "available" as const : "occupied" as const };
+  }));
+
+  return { registryPath: registry.registryPath, statuses };
+}
+
+async function findFreePorts(startPort: number, count: number) {
+  const ports: number[] = [];
+  for (let port = startPort; port <= 65535 && ports.length < count; port += 1) {
+    if (await isPortAvailable(port)) ports.push(port);
+  }
+  return ports;
+}
 
 function maybePid(pid: number | undefined) {
   return typeof pid === "number" && Number.isInteger(pid) && pid > 0 ? pid : undefined;
@@ -901,6 +994,10 @@ program
           ? ["add", "--dev", packageName]
           : ["install", "--save-dev", packageName];
 
+    if (packageManager === "pnpm" && isPnpmWorkspaceRoot(options.cwd)) {
+      args.splice(1, 0, "--workspace-root");
+    }
+
     console.log(`Upgrading ${packageName} with ${packageManager}...`);
     await execa(packageManager, args, { cwd: options.cwd, stdio: "inherit" });
     console.log(`Localghost is upgraded in ${options.cwd}.`);
@@ -1172,6 +1269,54 @@ program
   });
 
 program
+  .command("test")
+  .description("Run a test command with an isolated Localghost port")
+  .option("--cwd <path>", "Project directory", process.cwd())
+  .option("--instance <name>", "Parallel test instance name", String(process.pid))
+  .option("--port <number>", "Initial test port", parsePort, 5173)
+  .option("--lease-ttl <milliseconds>", "Lease lifetime before heartbeat renewal", Number, 30 * 60 * 1000)
+  .argument("<command...>", "Command to run after --")
+  .action(async (
+    command: string[],
+    options: { cwd: string; instance: string; port: number; leaseTtl: number }
+  ) => {
+    const [binary, ...args] = command;
+    if (!binary) throw new Error("Missing command. Use: localghost test -- <command>");
+
+    const session = await createLocalghostTestSession({
+      cwd: options.cwd,
+      instanceKey: options.instance,
+      leaseTtlMs: options.leaseTtl,
+      services: { default: { startPort: options.port } }
+    });
+    const heartbeat = session.startHeartbeat();
+    const child = execa(binary, args, {
+      cwd: options.cwd,
+      stdio: "inherit",
+      detached: process.platform !== "win32",
+      env: {
+        ...process.env,
+        LOCALGHOST_INSTANCE: options.instance,
+        LOCALGHOST_PORT: String(session.ports.default),
+        LOCALGHOST_DYNAMIC_PORT: "1",
+        VITE_PORT: String(session.ports.default)
+      }
+    });
+    const stop = (signal: NodeJS.Signals) => signalManagedProcess(child, signal);
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+
+    try {
+      await child;
+    } finally {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      clearInterval(heartbeat);
+      await session.release();
+    }
+  });
+
+program
   .command("status")
   .description("Print Localghost's project-local state file")
   .option("--project <name>", "Managed /etc/hosts block name")
@@ -1181,8 +1326,41 @@ program
   .option("--ready", "Exit non-zero when setup is missing or stale")
   .option("--https", "Check setup readiness for HTTPS mode")
   .option("--ssl", "Alias for --https")
+  .option("--ports", "List Localghost-managed and active ports")
+  .option("--from <port>", "First port to probe for free ports", parsePort, 3000)
+  .option("--count <number>", "Number of free ports to find", parseCount, 5)
   .option("--json", "Print raw JSON")
-  .action(async (options: ConfigCliOptions & { project?: string; ready?: boolean; json?: boolean } & ProxyModeCliOptions) => {
+  .action(async (options: ConfigCliOptions & { project?: string; ready?: boolean; ports?: boolean; from: number; count: number; json?: boolean } & ProxyModeCliOptions) => {
+    if (options.ports) {
+      const [{ registryPath, statuses }, freePorts] = await Promise.all([
+        readPortStatuses(),
+        findFreePorts(options.from, options.count)
+      ]);
+      const result = {
+        registryPath,
+        ports: statuses.sort((left, right) => left.port - right.port),
+        free: { from: options.from, count: options.count, ports: freePorts }
+      };
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`Registry: ${registryPath}`);
+      if (result.ports.length === 0) {
+        console.log("No Localghost ports are currently recorded.");
+      } else {
+        console.log("Port  State      Project / instance");
+        for (const port of result.ports) {
+          const owner = `${port.projectCwd} / ${port.instanceKey}`;
+          console.log(`${String(port.port).padEnd(5)} ${port.state.padEnd(10)} ${owner}`);
+        }
+      }
+      console.log(`Free ports from ${options.from}: ${freePorts.join(", ") || "none found"}`);
+      return;
+    }
+
     const state = readLocalghostState(options.cwd);
     const statePath = getLocalghostStatePath(options.cwd);
     const context = await resolveLocalghostContext({ ...contextOptionsFromCli(options), dynamicPort: false });
@@ -1376,6 +1554,7 @@ program
       ...(typeof options.dynamicPort === "boolean" ? { dynamicPort: options.dynamicPort } : {}),
       ...(typeof options.autoRepair === "boolean" ? { autoRepair: options.autoRepair } : {})
     });
+    try {
     const https = context.https;
     const readiness = getSetupReadiness({
       ...options,
@@ -1485,6 +1664,8 @@ program
         }
       }
       cleanupRun();
+    }
+    } finally {
       await context.releasePort?.();
     }
   });

@@ -55,12 +55,19 @@ export type AcquireLocalghostPortOptions = {
   host?: string;
 };
 
+export type RenewLocalghostPortOptions = {
+  projectCwd?: string;
+  instanceKey: string;
+  leaseTtlMs?: number;
+};
+
 export type LocalghostRegistry = {
   root: string;
   registryPath: string;
   lockPath: string;
   ownerToken: string;
   acquirePort(options: AcquireLocalghostPortOptions): Promise<LocalghostLease>;
+  renewPort(options: RenewLocalghostPortOptions): Promise<LocalghostLease | undefined>;
   releasePort(options: { projectCwd?: string; instanceKey: string }): Promise<boolean>;
   read(): Promise<LocalghostRegistryData>;
   prune(): Promise<{ removedLeases: number }>;
@@ -239,6 +246,20 @@ export function createLocalghostRegistry(options: LocalghostRegistryOptions = {}
         registry.leases = registry.leases.filter((lease) => leaseKey(lease.projectCwd, lease.instanceKey) !== key);
         const lease = { projectCwd, instanceKey: acquireOptions.instanceKey, port: selectedPort, pid, acquiredAt: timestamp, expiresAt: timestamp + (acquireOptions.leaseTtlMs ?? 30 * 60 * 1000), ownerToken };
         registry.leases.push(lease);
+        await writeRegistry(registry);
+        return lease;
+      });
+    },
+    async renewPort(renewOptions) {
+      const projectCwd = canonicalizeLocalghostProjectCwd(renewOptions.projectCwd ?? cwd);
+      return withLock(async (registry) => {
+        const lease = registry.leases.find((candidate) =>
+          candidate.projectCwd === projectCwd &&
+          candidate.instanceKey === renewOptions.instanceKey &&
+          candidate.ownerToken === ownerToken
+        );
+        if (!lease || lease.expiresAt <= now() || !isRunning(lease.pid)) return undefined;
+        lease.expiresAt = now() + (renewOptions.leaseTtlMs ?? 30 * 60 * 1000);
         await writeRegistry(registry);
         return lease;
       });

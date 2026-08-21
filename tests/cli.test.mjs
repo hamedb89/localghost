@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -70,6 +70,61 @@ test("upgrade updates Localghost through the detected package manager", async ()
     "--save-dev",
     "@hamedb89/localghost@latest"
   ]);
+});
+
+test("upgrade explicitly targets a pnpm workspace root", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-pnpm-upgrade-"));
+  const pnpmPath = join(cwd, "pnpm");
+  const argsPath = join(cwd, "pnpm-args.txt");
+  await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "workspace-root" }));
+  await writeFile(join(cwd, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n");
+  await writeFile(join(cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  await writeFile(pnpmPath, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$LOCALGHOST_PNPM_ARGS\"\n");
+  await chmod(pnpmPath, 0o755);
+
+  const { stdout } = await runCli(["upgrade", "--cwd", cwd], {
+    PATH: `${cwd}:${process.env.PATH ?? ""}`,
+    LOCALGHOST_PNPM_ARGS: argsPath
+  });
+
+  assert.match(stdout, /Localghost is upgraded/);
+  assert.deepEqual((await readFile(argsPath, "utf8")).trim().split("\n"), [
+    "add",
+    "--workspace-root",
+    "--save-dev",
+    "@hamedb89/localghost@latest"
+  ]);
+});
+
+test("status ports reports registry leases and free port candidates", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-status-ports-"));
+  const home = join(cwd, "localghost-home");
+  const activityPath = join(cwd, "activity.json");
+  await mkdir(home, { recursive: true });
+  await writeFile(join(home, "registry.json"), JSON.stringify({
+    version: 1,
+    allocations: [{ projectCwd: "/workspace/app", instanceKey: "api", port: 49123, updatedAt: 1 }],
+    leases: [{
+      projectCwd: "/workspace/app",
+      instanceKey: "api",
+      port: 49123,
+      pid: process.pid,
+      acquiredAt: 1,
+      expiresAt: Date.now() + 60_000,
+      ownerToken: "test"
+    }]
+  }));
+  await writeFile(activityPath, JSON.stringify({ version: 1, runs: [], setups: [] }));
+
+  const { stdout } = await runCli(["status", "--ports", "--from", "49124", "--count", "2", "--json"], {
+    LOCALGHOST_HOME: home,
+    LOCALGHOST_ACTIVITY_PATH: activityPath
+  });
+  const result = JSON.parse(stdout);
+
+  assert.equal(result.ports[0].port, 49123);
+  assert.equal(result.ports[0].state, "active");
+  assert.deepEqual(result.free.ports, [49124, 49125]);
 });
 
 test("init writes package-manager launchers when Localghost is not installed locally", async () => {
