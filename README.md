@@ -54,13 +54,13 @@ yarn dlx @hamedb89/localghost
 bunx --package @hamedb89/localghost localghost
 ```
 
-Test a real consumer repository against the local checkout without changing its manifest or working tree:
+From a Localghost checkout, test a real consumer repository against the local checkout without changing the consumer's manifest or working tree. This is repository development tooling and is not part of the installed npm package:
 
 ```sh
 ./bin/ghost consumer test faaast --repo /path/to/faaast-landing -- pnpm run bench:noop
 ```
 
-The command creates a detached worktree, installs its dependencies, builds and links the local Localghost checkout, runs the command inside the worktree, and removes the worktree afterward. Add `--keep` before `--` when inspecting the isolated checkout after a failure.
+The command creates a detached worktree, installs its dependencies, builds and links the local Localghost checkout, runs the command inside the worktree, and removes the worktree afterward. Add `--keep` before `--` when inspecting the isolated checkout after a failure. The FAAAST adapter uses a separate `.consumer.test` hostname suffix to avoid colliding with a normal `.localhost` development session.
 
 On the first interactive run, Localghost can create `.localghost`, explain the `/etc/hosts` change, write `ops/local/Caddyfile`, and print the browser-facing URL:
 
@@ -630,8 +630,8 @@ localghost ps [--json]
 localghost update [--json]
 localghost upgrade [--cwd path]
 localghost release [patch|minor|major]
-localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
-localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
+localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--clean-caddy] [--trust]
+localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--clean-caddy] [--trust] [--dynamic-port yes|no] -- command
 localghost routes [--https|--ssl]
 localghost print [--config file] [--config-pattern regex]
 ```
@@ -666,7 +666,7 @@ import { localGhostPlugin } from "@hamedb89/localghost/vite";
 - Preview the exact Pages artifact locally with `npm run site:serve`, then open `http://127.0.0.1:4173/`.
 - npm publish is guarded by `prepublishOnly` and the release workflow publishes with npm provenance.
 - To release the CLI, run `localghost release patch`, `localghost release minor`, or `localghost release major`. The command dispatches the **Release** workflow from `main`; it synchronizes version metadata, verifies the package and runtime matrix, commits and tags the bump, publishes npm, and creates a GitHub Release with generated notes. GitHub CLI must be installed and authenticated.
-- From this repository, `./bin/ghost release minor` (or the shorter `./bin/c release minor`) pushes `main` and dispatches the same guarded GitHub release workflow. Use `./bin/ghost check` for the release verification locally, `./bin/ghost release status` to inspect recent runs, or `./bin/ghost release retry v0.2.0` to retry publishing an existing tag.
+- From this repository, `./bin/ghost release minor` (or the shorter `./bin/c release minor`) pushes `main` and dispatches the same guarded GitHub release workflow. Use `./bin/ghost check` for the release verification locally, `./bin/ghost release status` to inspect recent runs, or `./bin/ghost release retry v0.4.0` to retry publishing an existing tag.
 - Runtime dependencies are intentionally small: `commander` and `execa`. Vite is an optional peer dependency.
 - No postinstall scripts, hidden Homebrew installs, surprise browser tabs, or broad hosts-file rewrites.
 - Update checks are best-effort, cached for 24 hours, and can be disabled with `LOCALGHOST_NO_UPDATE_CHECK=1` or `--no-update-check`.
