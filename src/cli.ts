@@ -562,6 +562,9 @@ async function runDetectedServices(options: {
       }
       signalManagedProcess(caddy, "SIGINT");
       await Promise.allSettled([caddyExit, ...children]);
+      if (!(await waitForServicePorts(entries))) {
+        console.warn("Localghost: timed out waiting for service ports to be released.");
+      }
       cleanupRun();
     }
   } finally {
@@ -1386,6 +1389,9 @@ program
       stopChild();
       stopCaddy();
       await Promise.allSettled([child, caddyExit]);
+      if (!(await waitForServicePorts(context.entries))) {
+        console.warn("Localghost: timed out waiting for service ports to be released.");
+      }
       cleanupRun();
       await context.releasePort?.();
     }
