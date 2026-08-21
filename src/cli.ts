@@ -468,6 +468,19 @@ async function waitForServicePorts(entries: DevHostEntry[], timeoutMs = 10_000) 
   return false;
 }
 
+async function waitForPortsToBeAvailable(entries: DevHostEntry[], timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  const ports = [...new Set(entries.map((entry) => entry.port))];
+
+  while (Date.now() < deadline) {
+    const availability = await Promise.all(ports.map((port) => isPortAvailable(port)));
+    if (availability.every(Boolean)) return true;
+    await wait(50);
+  }
+
+  return false;
+}
+
 async function runDetectedServices(options: {
   cwd: string;
   services: DetectedDevService[];
@@ -562,7 +575,7 @@ async function runDetectedServices(options: {
       }
       signalManagedProcess(caddy, "SIGINT");
       await Promise.allSettled([caddyExit, ...children]);
-      if (!(await waitForServicePorts(entries))) {
+      if (!(await waitForPortsToBeAvailable(entries))) {
         console.warn("Localghost: timed out waiting for service ports to be released.");
       }
       cleanupRun();
@@ -1389,7 +1402,7 @@ program
       stopChild();
       stopCaddy();
       await Promise.allSettled([child, caddyExit]);
-      if (!(await waitForServicePorts(context.entries))) {
+      if (!(await waitForPortsToBeAvailable(context.entries))) {
         console.warn("Localghost: timed out waiting for service ports to be released.");
       }
       cleanupRun();
