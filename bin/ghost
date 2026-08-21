@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ghost check
-  ghost release <patch|minor|major>
+  ghost release [patch|minor|major]
   ghost release retry <vX.Y.Z>
   ghost release status
 EOF
@@ -24,8 +24,8 @@ if [ "${1:-}" != "release" ]; then
 fi
 
 case "${2:-}" in
-  patch|minor|major)
-    bump=$2
+  ""|patch|minor|major)
+    bump=${2:-patch}
     ;;
   retry)
     tag=${3:-}

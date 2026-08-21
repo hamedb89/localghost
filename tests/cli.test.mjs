@@ -45,8 +45,45 @@ test("agent guide describes the supported repository workflow", async () => {
   const guide = JSON.parse(stdout);
 
   assert.equal(guide.preferredScript, "localghost");
+  assert.equal(guide.packageUpgrade, "localghost upgrade");
+  assert.match(guide.packageLaunchers.npm, /npm exec/);
   assert.equal(guide.proxyOnlyCommand, "localghost dev");
   assert.equal(guide.userState, "~/.localghost");
+});
+
+test("upgrade updates Localghost through the detected package manager", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-upgrade-"));
+  const npmPath = join(cwd, "npm");
+  const argsPath = join(cwd, "npm-args.txt");
+  await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "consumer" }));
+  await writeFile(npmPath, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$LOCALGHOST_NPM_ARGS\"\n");
+  await chmod(npmPath, 0o755);
+
+  const { stdout } = await runCli(["upgrade", "--cwd", cwd], {
+    PATH: `${cwd}:${process.env.PATH ?? ""}`,
+    LOCALGHOST_NPM_ARGS: argsPath
+  });
+
+  assert.match(stdout, /Localghost is upgraded/);
+  assert.deepEqual((await readFile(argsPath, "utf8")).trim().split("\n"), [
+    "install",
+    "--save-dev",
+    "@hamedb89/localghost@latest"
+  ]);
+});
+
+test("init writes package-manager launchers when Localghost is not installed locally", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-init-launcher-"));
+  const packageJsonPath = join(cwd, "package.json");
+  await writeFile(packageJsonPath, JSON.stringify({ name: "consumer", scripts: {} }));
+
+  await runCli(["init", "--cwd", cwd, "--write-scripts"]);
+
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+  assert.equal(
+    packageJson.scripts["localghost:setup"],
+    "npm exec --yes --package=@hamedb89/localghost -- localghost setup"
+  );
 });
 
 test("release command dispatches the requested semantic bump", async () => {

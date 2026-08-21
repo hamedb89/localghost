@@ -19,8 +19,9 @@ localghost status [--ready] [--json]
 localghost ps [--json]
 localghost guide [--agent] [--json]
 localghost tunnel [--cwd path] [--config file] [--config-pattern regex] [--ghost-config file] [--target-host host]
-localghost release <patch|minor|major>
+localghost release [patch|minor|major]
 localghost update [--json]
+localghost upgrade [--cwd path]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
 localghost print [--config file] [--config-pattern regex]

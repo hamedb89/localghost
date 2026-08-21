@@ -17,6 +17,15 @@ Choose the install command for the repository's package manager. Then initialize
 localghost init --write-scripts
 ```
 
+For a repository without Localghost installed, use the package-manager launcher first:
+
+```sh
+npm exec --yes --package=@hamedb89/localghost -- localghost init --write-scripts
+pnpm dlx @hamedb89/localghost init --write-scripts
+yarn dlx @hamedb89/localghost init --write-scripts
+bunx --package @hamedb89/localghost localghost init --write-scripts
+```
+
 ## Project Contract
 
 As a developer, I want one small file that explains the local domain map for this repo.
@@ -50,6 +59,8 @@ LOCALGHOST_NO_UPDATE_CHECK=1 localghost doctor
 ```
 
 Localghost checks npm after successful commands, caches the result for 24 hours, and ignores check failures. `LOCALGHOST_NO_UPDATE_CHECK=1` and `--no-update-check` disable the automatic check.
+
+To install or update the package in the current repository, run `localghost upgrade`. If no local CLI exists yet, invoke it through the package manager, for example `npm exec --yes --package=@hamedb89/localghost -- localghost upgrade`.
 
 ## One-Time Setup
 

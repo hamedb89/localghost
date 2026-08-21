@@ -30,7 +30,7 @@ import { listGhostTunnelEntries } from "./ghost-file.js";
 import { startGhostTunnelAgent } from "./ghost-agent.js";
 import { createRedisGhostTunnelStoreFromEnv } from "./ghost-tunnel-store.js";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
-import { initLocalghost, type PackageManager } from "./init.js";
+import { detectPackageManager, initLocalghost, type PackageManager } from "./init.js";
 import { formatLocalghostAgentGuide } from "./guide.js";
 import { findLocalMdnsHosts, type DevHostEntry } from "./parse.js";
 import { isPortAvailable } from "./port.js";
@@ -412,6 +412,24 @@ function registerCleanup(id: string) {
   };
 }
 
+function registerSignalShutdown(stop: () => void) {
+  let requested = false;
+  const request = () => {
+    if (requested) return;
+    requested = true;
+    stop();
+  };
+
+  process.once("SIGINT", request);
+  process.once("SIGTERM", request);
+
+  return () => {
+    process.off("SIGINT", request);
+    process.off("SIGTERM", request);
+    request();
+  };
+}
+
 async function resolveServiceRuntimeEntries(
   services: DetectedDevService[],
   dynamicPort: boolean,
@@ -478,6 +496,31 @@ async function waitForPortsToBeAvailable(entries: DevHostEntry[], timeoutMs = 10
     await wait(50);
   }
 
+  return false;
+}
+
+async function waitForProcessShutdown(
+  processes: Promise<unknown>[],
+  forceStop: (signal: NodeJS.Signals) => void,
+  timeoutMs = 10_000
+) {
+  const settled = Promise.allSettled(processes);
+  const completed = await Promise.race([
+    settled.then(() => true),
+    wait(timeoutMs).then(() => false)
+  ]);
+  if (completed) return true;
+
+  console.warn("Localghost: timed out waiting for managed processes to stop; escalating termination.");
+  forceStop("SIGTERM");
+  const terminated = await Promise.race([
+    settled.then(() => true),
+    wait(2_000).then(() => false)
+  ]);
+  if (terminated) return true;
+
+  forceStop("SIGKILL");
+  await Promise.race([settled, wait(1_000)]);
   return false;
 }
 
@@ -558,6 +601,13 @@ async function runDetectedServices(options: {
     });
     const cleanupRun = registerCleanup(runRecord.id);
     const processExit = Promise.race([caddyExit, ...children]);
+    const stopManaged = (signal: NodeJS.Signals) => {
+      for (const child of children) {
+        signalManagedProcess(child, signal);
+      }
+      signalManagedProcess(caddy, signal);
+    };
+    const finishShutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
 
     try {
       const ready = await Promise.race([
@@ -570,13 +620,17 @@ async function runDetectedServices(options: {
       }
       await processExit;
     } finally {
-      for (const child of children) {
-        signalManagedProcess(child, "SIGINT");
-      }
-      signalManagedProcess(caddy, "SIGINT");
-      await Promise.allSettled([caddyExit, ...children]);
+      finishShutdown();
+      await waitForProcessShutdown(
+        [caddyExit, ...children],
+        stopManaged
+      );
       if (!(await waitForPortsToBeAvailable(entries))) {
         console.warn("Localghost: timed out waiting for service ports to be released.");
+        stopManaged("SIGTERM");
+        if (!(await waitForPortsToBeAvailable(entries, 2_000))) {
+          stopManaged("SIGKILL");
+        }
       }
       cleanupRun();
     }
@@ -698,7 +752,7 @@ program
   .option("--no-update-check", "Skip the npm update check for this run");
 
 program.hook("postAction", async (_thisCommand, actionCommand) => {
-  if (actionCommand.name() === "update" || actionCommand.name() === "release") return;
+  if (["update", "upgrade", "release"].includes(actionCommand.name())) return;
 
   const options = program.opts<{ updateCheck?: boolean }>();
   await maybeNotifyAboutUpdate({ disabled: options.updateCheck === false });
@@ -833,9 +887,29 @@ program
   });
 
 program
+  .command("upgrade")
+  .description("Install or update Localghost in the current repository")
+  .option("--cwd <path>", "Consumer repository", process.cwd())
+  .action(async (options: { cwd: string }) => {
+    const packageManager = detectPackageManager(options.cwd);
+    const packageName = "@hamedb89/localghost@latest";
+    const args = packageManager === "yarn"
+      ? ["add", "--dev", packageName]
+      : packageManager === "pnpm"
+        ? ["add", "--save-dev", packageName]
+        : packageManager === "bun"
+          ? ["add", "--dev", packageName]
+          : ["install", "--save-dev", packageName];
+
+    console.log(`Upgrading ${packageName} with ${packageManager}...`);
+    await execa(packageManager, args, { cwd: options.cwd, stdio: "inherit" });
+    console.log(`Localghost is upgraded in ${options.cwd}.`);
+  });
+
+program
   .command("release")
   .description("Dispatch an automated Localghost CLI release")
-  .argument("<bump>", "Semantic version increment: patch, minor, or major", parseReleaseBump)
+  .argument("[bump]", "Semantic version increment: patch, minor, or major (default: patch)", parseReleaseBump, "patch")
   .action(async (bump: ReleaseBump) => {
     const repository = "hamedb89/localghost";
 
@@ -1389,21 +1463,26 @@ program
     });
     const cleanupRun = registerCleanup(runRecord.id);
 
-    const stopCaddy = () => {
-      signalManagedProcess(caddy, "SIGINT");
+    const stopManaged = (signal: NodeJS.Signals) => {
+      signalManagedProcess(child, signal);
+      signalManagedProcess(caddy, signal);
     };
-    const stopChild = () => {
-      signalManagedProcess(child, "SIGINT");
-    };
+    const finishShutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
 
     try {
       await Promise.race([child, caddyExit]);
     } finally {
-      stopChild();
-      stopCaddy();
-      await Promise.allSettled([child, caddyExit]);
+      finishShutdown();
+      await waitForProcessShutdown(
+        [child, caddyExit],
+        stopManaged
+      );
       if (!(await waitForPortsToBeAvailable(context.entries))) {
         console.warn("Localghost: timed out waiting for service ports to be released.");
+        stopManaged("SIGTERM");
+        if (!(await waitForPortsToBeAvailable(context.entries, 2_000))) {
+          stopManaged("SIGKILL");
+        }
       }
       cleanupRun();
       await context.releasePort?.();

@@ -45,6 +45,15 @@ Then keep using the command your repo already expects:
 npm exec localghost
 ```
 
+If Localghost is not installed in the repository yet, use an explicit package-manager launcher:
+
+```sh
+npm exec --yes --package=@hamedb89/localghost -- localghost
+pnpm dlx @hamedb89/localghost
+yarn dlx @hamedb89/localghost
+bunx --package @hamedb89/localghost localghost
+```
+
 On the first interactive run, Localghost can create `.localghost`, explain the `/etc/hosts` change, write `ops/local/Caddyfile`, and print the browser-facing URL:
 
 ```txt
@@ -86,6 +95,14 @@ Create the repo-local hostname contract:
 ```sh
 localghost init --write-scripts
 ```
+
+Install or update Localghost in the current repository at any time:
+
+```sh
+npm exec --yes --package=@hamedb89/localghost -- localghost upgrade
+```
+
+Once the package is installed locally, use `localghost upgrade` or the package manager's normal update command.
 
 Check whether the machine is ready:
 
@@ -603,7 +620,8 @@ localghost teardown [--project name] [--remove-caddyfile]
 localghost status [--ready] [--json]
 localghost ps [--json]
 localghost update [--json]
-localghost release <patch|minor|major>
+localghost upgrade [--cwd path]
+localghost release [patch|minor|major]
 localghost dev [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust]
 localghost run [--config file] [--config-pattern regex] [--https|--ssl] [--auto-repair yes|no] [--trust] [--dynamic-port] -- command
 localghost routes [--https|--ssl]

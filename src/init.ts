@@ -75,31 +75,47 @@ function getConfigFlag(configFile: string) {
   return configFile === LOCALGHOST_CONFIG_FILE ? "" : ` --config ${shellQuote(configFile)}`;
 }
 
-function updatePackageScripts(packageJsonPath: string, configFile: string): boolean {
+function hasLocalghostDependency(pkg: Record<string, unknown>) {
+  return ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some((field) => {
+    const dependencies = pkg[field];
+    return typeof dependencies === "object" && dependencies !== null && "@hamedb89/localghost" in dependencies;
+  });
+}
+
+function localghostCommand(packageManager: PackageManager, installed: boolean) {
+  if (installed) return "localghost";
+  if (packageManager === "pnpm") return "pnpm dlx @hamedb89/localghost";
+  if (packageManager === "yarn") return "yarn dlx @hamedb89/localghost";
+  if (packageManager === "bun") return "bunx --package @hamedb89/localghost localghost";
+  return "npm exec --yes --package=@hamedb89/localghost -- localghost";
+}
+
+function updatePackageScripts(packageJsonPath: string, configFile: string, packageManager: PackageManager): boolean {
   const pkg = readPackageJson(packageJsonPath);
   if (!pkg) return false;
 
   const scripts = typeof pkg.scripts === "object" && pkg.scripts ? (pkg.scripts as Record<string, unknown>) : {};
   const configFlag = getConfigFlag(configFile);
+  const command = localghostCommand(packageManager, hasLocalghostDependency(pkg));
   const nextScripts = {
     ...scripts,
-    "localghost:setup": scripts["localghost:setup"] ?? `localghost setup${configFlag}`,
-    "localghost:proxy": scripts["localghost:proxy"] ?? `localghost dev${configFlag}`,
-    "localghost:proxy:https": scripts["localghost:proxy:https"] ?? `localghost dev${configFlag} --https`,
-    "localghost:run": scripts["localghost:run"] ?? `localghost run${configFlag} --`,
-    "localghost:ready": scripts["localghost:ready"] ?? `localghost status${configFlag} --ready`,
-    "localghost:repair": scripts["localghost:repair"] ?? `localghost repair${configFlag}`,
-    "localghost:trust": scripts["localghost:trust"] ?? `localghost trust${configFlag}`,
-    "localghost:ps": scripts["localghost:ps"] ?? "localghost ps",
-    "localghost:print": scripts["localghost:print"] ?? `localghost print${configFlag}`,
-    "localghost:routes": scripts["localghost:routes"] ?? `localghost routes${configFlag}`,
-    "localghost:status": scripts["localghost:status"] ?? "localghost status",
-    "localghost:reset": scripts["localghost:reset"] ?? "localghost reset",
-    "localghost:teardown": scripts["localghost:teardown"] ?? "localghost teardown",
-    "localghost:doctor": scripts["localghost:doctor"] ?? "localghost doctor",
-    "localghost:update": scripts["localghost:update"] ?? "localghost update",
-    "caddy:setup": scripts["caddy:setup"] ?? `localghost setup${configFlag}`,
-    "caddy:dev": scripts["caddy:dev"] ?? `localghost dev${configFlag}`
+    "localghost:setup": scripts["localghost:setup"] ?? `${command} setup${configFlag}`,
+    "localghost:proxy": scripts["localghost:proxy"] ?? `${command} dev${configFlag}`,
+    "localghost:proxy:https": scripts["localghost:proxy:https"] ?? `${command} dev${configFlag} --https`,
+    "localghost:run": scripts["localghost:run"] ?? `${command} run${configFlag} --`,
+    "localghost:ready": scripts["localghost:ready"] ?? `${command} status${configFlag} --ready`,
+    "localghost:repair": scripts["localghost:repair"] ?? `${command} repair${configFlag}`,
+    "localghost:trust": scripts["localghost:trust"] ?? `${command} trust${configFlag}`,
+    "localghost:ps": scripts["localghost:ps"] ?? `${command} ps`,
+    "localghost:print": scripts["localghost:print"] ?? `${command} print${configFlag}`,
+    "localghost:routes": scripts["localghost:routes"] ?? `${command} routes${configFlag}`,
+    "localghost:status": scripts["localghost:status"] ?? `${command} status`,
+    "localghost:reset": scripts["localghost:reset"] ?? `${command} reset`,
+    "localghost:teardown": scripts["localghost:teardown"] ?? `${command} teardown`,
+    "localghost:doctor": scripts["localghost:doctor"] ?? `${command} doctor`,
+    "localghost:update": scripts["localghost:update"] ?? `${command} update`,
+    "caddy:setup": scripts["caddy:setup"] ?? `${command} setup${configFlag}`,
+    "caddy:dev": scripts["caddy:dev"] ?? `${command} dev${configFlag}`
   };
 
   const changed = JSON.stringify(scripts) !== JSON.stringify(nextScripts);
@@ -140,7 +156,7 @@ export function initLocalghost(options: InitOptions = {}): InitResult {
   writeTextFile(configPath, renderConfig({ host, port, apiHost, apiPort }));
 
   const packageJsonPath = join(cwd, "package.json");
-  const packageJsonChanged = options.writeScripts ? updatePackageScripts(packageJsonPath, configFile) : false;
+  const packageJsonChanged = options.writeScripts ? updatePackageScripts(packageJsonPath, configFile, packageManager) : false;
 
   return {
     configPath,

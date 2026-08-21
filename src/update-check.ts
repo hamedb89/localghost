@@ -194,7 +194,8 @@ export function formatUpdateMessage(result: UpdateCheckResult) {
 
   return [
     `localghost ${result.latestVersion} is available. Current: ${result.currentVersion}`,
-    `Update with: npm i -g ${result.packageName}@latest`
+    "Update a repository with: npm exec --yes --package=@hamedb89/localghost -- localghost upgrade",
+    "If Localghost is already installed locally, run: localghost upgrade"
   ].join("\n");
 }
 
