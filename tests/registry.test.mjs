@@ -63,6 +63,15 @@ test("renew extends only the owning live lease", async () => {
   assert.equal(await registry.renewPort({ instanceKey: "test:other:default" }), undefined);
 });
 
+test("reset clears leases and allocations", async () => {
+  const root = await setup();
+  const registry = createLocalghostRegistry({ stateRoot: root, availabilityCheck: available });
+  await registry.acquirePort({ instanceKey: "test:reset:default", startPort: 4350 });
+  await registry.reset();
+
+  assert.deepEqual(await registry.read(), { version: 1, allocations: [], leases: [] });
+});
+
 test("prunes expired and dead leases before allocating", async () => {
   const root = await setup();
   const registry = createLocalghostRegistry({ stateRoot: root, availabilityCheck: available, pid: 104, now: () => 1000, isProcessRunning: (pid) => pid === 104 });

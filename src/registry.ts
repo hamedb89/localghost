@@ -71,6 +71,7 @@ export type LocalghostRegistry = {
   releasePort(options: { projectCwd?: string; instanceKey: string }): Promise<boolean>;
   read(): Promise<LocalghostRegistryData>;
   prune(): Promise<{ removedLeases: number }>;
+  reset(): Promise<void>;
 };
 
 type RegistryLock = { pid: number; createdAt: number; token: string };
@@ -207,6 +208,14 @@ export function createLocalghostRegistry(options: LocalghostRegistryOptions = {}
         pruneRegistry(registry, now(), isRunning);
         await writeRegistry(registry);
         return { removedLeases: before - registry.leases.length };
+      } finally {
+        await releaseLock();
+      }
+    },
+    async reset() {
+      const releaseLock = await lock();
+      try {
+        await writeRegistry({ version: 1, allocations: [], leases: [] });
       } finally {
         await releaseLock();
       }

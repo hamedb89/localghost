@@ -1269,6 +1269,28 @@ program
   });
 
 program
+  .command("ports")
+  .description("Manage Localghost port registry state")
+  .addCommand(new Command("prune")
+    .description("Remove expired or dead port leases")
+    .option("--cwd <path>", "Project directory", process.cwd())
+    .option("--json", "Print raw JSON")
+    .action(async (options: { cwd: string; json?: boolean }) => {
+      const result = await createLocalghostRegistry({ cwd: options.cwd }).prune();
+      if (options.json) console.log(JSON.stringify(result, null, 2));
+      else console.log(`Pruned ${result.removedLeases} stale registry lease${result.removedLeases === 1 ? "" : "s"}.`);
+    }))
+  .addCommand(new Command("reset")
+    .description("Clear all remembered allocations and leases")
+    .option("--cwd <path>", "Project directory", process.cwd())
+    .option("--yes", "Confirm the destructive registry reset")
+    .action(async (options: { cwd: string; yes?: boolean }) => {
+      if (!options.yes) throw new Error("Resetting the port registry is destructive. Re-run with --yes.");
+      await createLocalghostRegistry({ cwd: options.cwd }).reset();
+      console.log("Localghost port registry reset.");
+    }));
+
+program
   .command("test")
   .description("Run a test command with an isolated Localghost port")
   .option("--cwd <path>", "Project directory", process.cwd())
