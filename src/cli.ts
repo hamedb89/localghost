@@ -516,10 +516,13 @@ function registerSignalShutdown(stop: () => void) {
   process.once("SIGINT", request);
   process.once("SIGTERM", request);
 
-  return () => {
-    process.off("SIGINT", request);
-    process.off("SIGTERM", request);
-    request();
+  return {
+    wasRequested: () => requested,
+    finish: () => {
+      process.off("SIGINT", request);
+      process.off("SIGTERM", request);
+      if (!requested) stop();
+    }
   };
 }
 
@@ -585,11 +588,23 @@ async function waitForPortsToBeAvailable(entries: DevHostEntry[], timeoutMs = 10
 
   while (Date.now() < deadline) {
     const availability = await Promise.all(ports.map((port) => isPortAvailable(port)));
-    if (availability.every(Boolean)) return true;
+    if (availability.every(Boolean)) return { available: true, blocked: [] };
     await wait(50);
   }
 
-  return false;
+  const availability = await Promise.all(entries.map(async (entry) => ({
+    entry,
+    available: await isPortAvailable(entry.port)
+  })));
+  const blocked = availability.filter(({ available }) => !available).map(({ entry }) => entry);
+  return { available: blocked.length === 0, blocked };
+}
+
+function formatBlockedPorts(entries: DevHostEntry[]) {
+  return [...new Map(entries.map((entry) => [
+    `${entry.host}:${entry.port}`,
+    `${entry.host} (port ${entry.port})`
+  ])).values()].join(", ");
 }
 
 async function waitForProcessShutdown(
@@ -700,7 +715,7 @@ async function runDetectedServices(options: {
       }
       signalManagedProcess(caddy, signal);
     };
-    const finishShutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
+    const shutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
 
     try {
       const ready = await Promise.race([
@@ -713,15 +728,18 @@ async function runDetectedServices(options: {
       }
       await processExit;
     } finally {
-      finishShutdown();
+      shutdown.finish();
       await waitForProcessShutdown(
         [caddyExit, ...children],
         stopManaged
       );
-      if (!(await waitForPortsToBeAvailable(entries))) {
-        console.warn("Localghost: timed out waiting for service ports to be released.");
+      const drained = await waitForPortsToBeAvailable(entries);
+      if (!drained.available && !shutdown.wasRequested()) {
+        console.warn(`Localghost: timed out waiting for service ports to be released: ${formatBlockedPorts(drained.blocked)}.`);
         stopManaged("SIGTERM");
-        if (!(await waitForPortsToBeAvailable(entries, 2_000))) {
+        const terminated = await waitForPortsToBeAvailable(entries, 2_000);
+        if (!terminated.available) {
+          console.warn(`Localghost: service ports still occupied after termination: ${formatBlockedPorts(terminated.blocked)}.`);
           stopManaged("SIGKILL");
         }
       }
@@ -1274,11 +1292,14 @@ program
   .addCommand(new Command("prune")
     .description("Remove expired or dead port leases")
     .option("--cwd <path>", "Project directory", process.cwd())
+    .option("--test-only", "Remove only stale test-session leases and records")
     .option("--json", "Print raw JSON")
-    .action(async (options: { cwd: string; json?: boolean }) => {
-      const result = await createLocalghostRegistry({ cwd: options.cwd }).prune();
+    .action(async (options: { cwd: string; testOnly?: boolean; json?: boolean }) => {
+      const result = options.testOnly
+        ? await createLocalghostRegistry({ cwd: options.cwd }).pruneTestSessions()
+        : await createLocalghostRegistry({ cwd: options.cwd }).prune();
       if (options.json) console.log(JSON.stringify(result, null, 2));
-      else console.log(`Pruned ${result.removedLeases} stale registry lease${result.removedLeases === 1 ? "" : "s"}.`);
+      else console.log(`Pruned ${result.removedLeases} stale registry lease${result.removedLeases === 1 ? "" : "s"}${"removedAllocations" in result ? ` and ${result.removedAllocations} test allocation${result.removedAllocations === 1 ? "" : "s"}` : ""}.`);
     }))
   .addCommand(new Command("reset")
     .description("Clear all remembered allocations and leases")
@@ -1668,20 +1689,23 @@ program
       signalManagedProcess(child, signal);
       signalManagedProcess(caddy, signal);
     };
-    const finishShutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
+    const shutdown = registerSignalShutdown(() => stopManaged("SIGINT"));
 
     try {
       await Promise.race([child, caddyExit]);
     } finally {
-      finishShutdown();
+      shutdown.finish();
       await waitForProcessShutdown(
         [child, caddyExit],
         stopManaged
       );
-      if (!(await waitForPortsToBeAvailable(context.entries))) {
-        console.warn("Localghost: timed out waiting for service ports to be released.");
+      const drained = await waitForPortsToBeAvailable(context.entries);
+      if (!drained.available && !shutdown.wasRequested()) {
+        console.warn(`Localghost: timed out waiting for service ports to be released: ${formatBlockedPorts(drained.blocked)}.`);
         stopManaged("SIGTERM");
-        if (!(await waitForPortsToBeAvailable(context.entries, 2_000))) {
+        const terminated = await waitForPortsToBeAvailable(context.entries, 2_000);
+        if (!terminated.available) {
+          console.warn(`Localghost: service ports still occupied after termination: ${formatBlockedPorts(terminated.blocked)}.`);
           stopManaged("SIGKILL");
         }
       }

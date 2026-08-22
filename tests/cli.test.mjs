@@ -127,6 +127,25 @@ test("status ports reports registry leases and free port candidates", async () =
   assert.deepEqual(result.free.ports, [49124, 49125]);
 });
 
+test("ports prune --test-only exposes safe test cleanup", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "localghost-test-prune-"));
+  const home = join(cwd, "localghost-home");
+  await mkdir(home, { recursive: true });
+  await writeFile(join(home, "registry.json"), JSON.stringify({ version: 1, allocations: [
+    { projectCwd: cwd, instanceKey: "test:stale:default", port: 49130, updatedAt: 1 },
+    { projectCwd: cwd, instanceKey: "dev", port: 49131, updatedAt: 1 }
+  ], leases: [
+    { projectCwd: cwd, instanceKey: "test:stale:default", port: 49130, pid: 999999, acquiredAt: 1, expiresAt: 2_000, ownerToken: "stale" },
+    { projectCwd: cwd, instanceKey: "dev", port: 49131, pid: 999999, acquiredAt: 1, expiresAt: 2_000, ownerToken: "dev" }
+  ] }));
+
+  const { stdout } = await runCli(["ports", "prune", "--test-only", "--json"], { LOCALGHOST_HOME: home });
+  assert.deepEqual(JSON.parse(stdout), { removedLeases: 1, removedAllocations: 1 });
+  const registry = JSON.parse(await readFile(join(home, "registry.json"), "utf8"));
+  assert.deepEqual(registry.leases.map(({ instanceKey }) => instanceKey), ["dev"]);
+  assert.deepEqual(registry.allocations.map(({ instanceKey }) => instanceKey), ["dev"]);
+});
+
 test("init writes package-manager launchers when Localghost is not installed locally", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "localghost-init-launcher-"));
   const packageJsonPath = join(cwd, "package.json");

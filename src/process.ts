@@ -8,7 +8,12 @@ export function signalManagedProcessPid(
   signal: ProcessSignal,
   killProcess: ProcessKiller = (value, processSignal) => process.kill(value, processSignal)
 ) {
-  if (typeof pid !== "number" || !Number.isInteger(pid) || pid < 1) return false;
+  if (
+    typeof pid !== "number" ||
+    !Number.isInteger(pid) ||
+    pid <= 1 ||
+    pid === process.pid
+  ) return false;
 
   try {
     // Detached POSIX children lead their own process group.

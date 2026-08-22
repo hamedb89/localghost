@@ -123,3 +123,22 @@ test("prunes expired and dead leases without changing allocations", async () => 
   ]);
   assert.deepEqual((await registry.read()).leases, []);
 });
+
+test("test-session pruning removes only stale test state and preserves live sessions", async () => {
+  const root = await setup();
+  const registry = createLocalghostRegistry({ stateRoot: root, now: () => 1_000, isProcessRunning: (pid) => pid === 101 });
+  await writeFile(join(root, "registry.json"), JSON.stringify({ version: 1, allocations: [
+    { projectCwd: "/app", instanceKey: "test:stale:default", port: 4800, updatedAt: 1 },
+    { projectCwd: "/app", instanceKey: "test:live:default", port: 4801, updatedAt: 1 },
+    { projectCwd: "/app", instanceKey: "dev", port: 4802, updatedAt: 1 }
+  ], leases: [
+    { projectCwd: "/app", instanceKey: "test:stale:default", port: 4800, pid: 999, acquiredAt: 0, expiresAt: 2_000, ownerToken: "stale" },
+    { projectCwd: "/app", instanceKey: "test:live:default", port: 4801, pid: 101, acquiredAt: 0, expiresAt: 2_000, ownerToken: "live" },
+    { projectCwd: "/app", instanceKey: "dev", port: 4802, pid: 999, acquiredAt: 0, expiresAt: 2_000, ownerToken: "dev" }
+  ] }));
+
+  assert.deepEqual(await registry.pruneTestSessions(), { removedLeases: 1, removedAllocations: 1 });
+  const result = await registry.read();
+  assert.deepEqual(result.leases.map(({ instanceKey }) => instanceKey), ["test:live:default", "dev"]);
+  assert.deepEqual(result.allocations.map(({ instanceKey }) => instanceKey), ["test:live:default", "dev"]);
+});

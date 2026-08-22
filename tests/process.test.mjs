@@ -35,3 +35,12 @@ test("does not hide permission failures", () => {
     /not allowed/
   );
 });
+
+test("does not signal the init or current process group", () => {
+  const calls = [];
+  const kill = (pid, signal) => calls.push({ pid, signal });
+
+  assert.equal(signalManagedProcessPid(1, "SIGTERM", kill), false);
+  assert.equal(signalManagedProcessPid(process.pid, "SIGTERM", kill), false);
+  assert.deepEqual(calls, []);
+});

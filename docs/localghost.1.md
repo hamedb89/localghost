@@ -150,10 +150,11 @@ localghost test --instance smoke-2 -- npm test
 
 ### ports
 
-Use `ports prune` to remove expired or dead leases while preserving remembered allocations. Use `ports reset --yes` to clear the entire port registry, including remembered allocations.
+Use `ports prune` to remove expired or dead leases while preserving remembered allocations. Use `ports prune --test-only` for test cleanup; it removes only stale `test:` leases and orphaned test allocations, preserving live sessions and other Localghost leases. Use `ports reset --yes` to clear the entire port registry, including remembered allocations.
 
 ```sh
 localghost ports prune
+localghost ports prune --test-only
 localghost ports reset --yes
 ```
 

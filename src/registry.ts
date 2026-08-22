@@ -71,6 +71,7 @@ export type LocalghostRegistry = {
   releasePort(options: { projectCwd?: string; instanceKey: string }): Promise<boolean>;
   read(): Promise<LocalghostRegistryData>;
   prune(): Promise<{ removedLeases: number }>;
+  pruneTestSessions(): Promise<{ removedLeases: number; removedAllocations: number }>;
   reset(): Promise<void>;
 };
 
@@ -110,6 +111,10 @@ function validRegistry(value: unknown): value is LocalghostRegistryData {
 
 function pruneRegistry(registry: LocalghostRegistryData, now: number, isRunning: (pid: number) => boolean) {
   registry.leases = registry.leases.filter((lease) => lease.expiresAt > now && isRunning(lease.pid));
+}
+
+function isTestSessionKey(instanceKey: string) {
+  return instanceKey.startsWith("test:");
 }
 
 async function readJson(path: string) {
@@ -208,6 +213,31 @@ export function createLocalghostRegistry(options: LocalghostRegistryOptions = {}
         pruneRegistry(registry, now(), isRunning);
         await writeRegistry(registry);
         return { removedLeases: before - registry.leases.length };
+      } finally {
+        await releaseLock();
+      }
+    },
+    async pruneTestSessions() {
+      const releaseLock = await lock();
+      try {
+        const registry = await readRegistry();
+        const staleTestKeys = new Set(
+          registry.leases
+            .filter((lease) => isTestSessionKey(lease.instanceKey) && (lease.expiresAt <= now() || !isRunning(lease.pid)))
+            .map((lease) => leaseKey(lease.projectCwd, lease.instanceKey))
+        );
+        const beforeLeases = registry.leases.length;
+        registry.leases = registry.leases.filter((lease) => !staleTestKeys.has(leaseKey(lease.projectCwd, lease.instanceKey)));
+        const activeKeys = new Set(registry.leases.map((lease) => leaseKey(lease.projectCwd, lease.instanceKey)));
+        const beforeAllocations = registry.allocations.length;
+        registry.allocations = registry.allocations.filter((allocation) =>
+          !isTestSessionKey(allocation.instanceKey) || activeKeys.has(leaseKey(allocation.projectCwd, allocation.instanceKey))
+        );
+        await writeRegistry(registry);
+        return {
+          removedLeases: beforeLeases - registry.leases.length,
+          removedAllocations: beforeAllocations - registry.allocations.length
+        };
       } finally {
         await releaseLock();
       }
