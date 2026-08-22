@@ -1,5 +1,5 @@
 import type { DevHostEntry } from "./parse.js";
-import type { GhostTunnelConfig } from "./tunnel.js";
+import type { GhostTunnelConfig } from "@hamedb89/ghost-tunnel";
 
 export type DomainRoute = {
   host: string;

@@ -1,6 +1,9 @@
 {
   "name": "@hamedb89/localghost",
   "version": "0.6.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "description": "Friendly local hostnames for app repos with .localghost, Caddy, /etc/hosts, and Vite.",
   "type": "module",
   "bin": {
@@ -41,7 +44,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsup src/index.ts src/vite.ts src/cli.ts --format esm --dts",
+    "build": "npm run build --workspace=@hamedb89/ghost-tunnel && tsup src/index.ts src/vite.ts src/cli.ts --format esm --dts",
     "macos:widget:build": "bash apps/macos-widget/build.sh",
     "dev": "tsx src/cli.ts",
     "test": "npm run build && node --test tests/*.test.mjs",

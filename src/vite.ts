@@ -22,7 +22,7 @@ import { ask, canPrompt, confirm } from "./prompt.js";
 import { getLocalghostStatePath, readLocalghostState, writeLocalghostState } from "./state.js";
 import { getCaddyfilePath, renderCaddyfile, validateCaddyfile, writeCaddyfile } from "./caddy.js";
 import type { DevHostEntry } from "./parse.js";
-import { resolveGhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
+import { resolveGhostTunnelConfig, type GhostTunnelOptions } from "@hamedb89/ghost-tunnel";
 import { formatGhostTunnel } from "./routes.js";
 
 export type LocalGhostPluginOptions = {

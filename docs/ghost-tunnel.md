@@ -160,9 +160,13 @@ Then the handler can resolve the request and return a safe relay status, a signe
 import { createVercelGhostTunnelHandler } from "@hamedb89/localghost";
 
 export default createVercelGhostTunnelHandler({
-  cwd: process.cwd(),
   domain: "copper-comet.example",
   authenticated: false,
+  ghostTunnel: {
+    mode: "public",
+    domains: "copper-comet.example",
+    transport: "none"
+  },
   ipSigningSecret: process.env.LOCALGHOST_IP_SIGNING_SECRET
 });
 ```
@@ -288,9 +292,11 @@ Do not use only `*` for Ghost Tunnel. A record named `*` covers `anything.copper
 
 ```ts
 import {
-  assertSecureGhostTunnelRequest,
-  constructGhostTunnelUrl,
   readLocalghostProjectConfig
+} from "@hamedb89/localghost";
+import {
+  assertSecureGhostTunnelRequest,
+  constructGhostTunnelUrl
 } from "@hamedb89/localghost";
 
 const { config } = await readLocalghostProjectConfig();

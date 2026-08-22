@@ -7,5 +7,6 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   splitting: false,
-  target: "node20"
+  target: "node20",
+  noExternal: ["@hamedb89/ghost-tunnel"]
 });

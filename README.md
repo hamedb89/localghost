@@ -495,9 +495,9 @@ Production code can parse and validate the incoming wildcard host:
 
 ```ts
 import {
-  assertSecureGhostTunnelRequest,
   readLocalghostProjectConfig
 } from "@hamedb89/localghost";
+import { assertSecureGhostTunnelRequest } from "@hamedb89/localghost";
 
 const { config } = await readLocalghostProjectConfig();
 
@@ -509,6 +509,10 @@ const route = assertSecureGhostTunnelRequest({
   ghostTunnel: config.ghostTunnel
 });
 ```
+
+Ghost Tunnel is maintained as a private workspace package and bundled into
+`@hamedb89/localghost`. Consumers install and import only the Localghost
+package.
 
 By default, secure requests require HTTPS and app-authenticated access.
 

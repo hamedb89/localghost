@@ -13,7 +13,7 @@ import { findAvailablePort } from "./port.js";
 import { createLocalghostRegistry } from "./registry.js";
 import type { DevHostEntry } from "./parse.js";
 import type { LocalghostServiceOptions } from "./command.js";
-import { resolveGhostTunnelConfig, type GhostTunnelConfig, type GhostTunnelOptions } from "./tunnel.js";
+import { resolveGhostTunnelConfig, type GhostTunnelConfig, type GhostTunnelOptions } from "@hamedb89/ghost-tunnel";
 
 export type LocalghostContextOptions = {
   cwd?: string;

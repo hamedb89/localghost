@@ -28,9 +28,11 @@ import {
 import { readLocalghostProjectConfig, resolveLocalghostContext } from "./context.js";
 import { checkCaddy, runDoctor } from "./doctor.js";
 import { assertLocalDevelopment } from "./env.js";
-import { listGhostTunnelEntries } from "./ghost-file.js";
-import { startGhostTunnelAgent } from "./ghost-agent.js";
-import { createRedisGhostTunnelStoreFromEnv } from "./ghost-tunnel-store.js";
+import {
+  createRedisGhostTunnelStoreFromEnv,
+  listGhostTunnelEntries,
+  startGhostTunnelAgent
+} from "@hamedb89/ghost-tunnel";
 import { getSystemHostsPath, removeSystemHosts, renderHostsBlock, updateSystemHosts } from "./hosts-file.js";
 import { detectPackageManager, initLocalghost, isPnpmWorkspaceRoot, type PackageManager } from "./init.js";
 import { createLocalghostTestSession } from "./test-session.js";
@@ -42,7 +44,7 @@ import { canPrompt, confirm } from "./prompt.js";
 import { formatDomainRoutes, formatGhostTunnel } from "./routes.js";
 import { getLocalghostStatePath, patchLocalghostState, readLocalghostState, writeLocalghostState } from "./state.js";
 import { checkForUpdate, formatUpdateMessage, LOCALGHOST_VERSION, maybeNotifyAboutUpdate } from "./update-check.js";
-import type { GhostTunnelConfig } from "./tunnel.js";
+import type { GhostTunnelConfig } from "@hamedb89/ghost-tunnel";
 import { execa } from "execa";
 import { signalManagedProcess, signalManagedProcessPid } from "./process.js";
 
