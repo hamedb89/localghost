@@ -13,19 +13,28 @@ env:
 
 jobs:
   verify:
-    name: Node 24
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup tools
-        uses: jdx/mise-action@v4.2.5
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          cache: true
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Enable package manager
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: corepack npm ci
 
       - name: Verify package and site
         run: ./bin/ghost check
@@ -37,10 +46,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup tools
-        uses: jdx/mise-action@v4.2.5
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          cache: true
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Install dependencies
         run: npm ci
