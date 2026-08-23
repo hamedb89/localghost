@@ -30,15 +30,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup tools
+        uses: jdx/mise-action@v2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Enable package manager
-        run: corepack enable
+          cache: true
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
@@ -46,7 +41,7 @@ jobs:
           enablement: true
 
       - name: Build static site
-        run: corepack npm run site:build
+        run: npm run site:build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

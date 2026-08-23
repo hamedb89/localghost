@@ -35,13 +35,13 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup tools
+        uses: jdx/mise-action@v2
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: true
+
+      - name: Configure npm registry
+        run: npm config set registry https://registry.npmjs.org
 
       - name: Use npm with trusted publishing support
         run: npm install -g npm@latest
@@ -55,11 +55,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Verify package and site
         run: ./bin/ghost check
