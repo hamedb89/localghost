@@ -36,7 +36,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup tools
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v4.2.5
         with:
           cache: true
 
